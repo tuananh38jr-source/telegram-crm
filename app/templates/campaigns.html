@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block title %}Chiến dịch - Telegram Ads CRM{% endblock %}
+{% block header %}Quản lý chiến dịch quảng cáo{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- Add campaign form -->
+  <div class="lg:col-span-1">
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-sm font-semibold text-gray-700 mb-4">Thêm chiến dịch mới</h3>
+      <form action="/campaigns" method="post" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Tên chiến dịch</label>
+          <input type="text" name="name" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Channel đích</label>
+          <select name="channel_id" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+            <option value="">-- Chọn channel --</option>
+            {% for ch in channels %}
+            <option value="{{ ch.id }}">{{ ch.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Ngân sách</label>
+            <input type="number" step="0.01" name="budget" value="0" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Loại tiền</label>
+            <select name="currency" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              <option value="TON">TON</option>
+              <option value="USDT">USDT</option>
+              <option value="USD">USD</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Trạng thái</label>
+          <select name="status" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+            <option value="active">Đang chạy</option>
+            <option value="paused">Tạm dừng</option>
+            <option value="completed">Hoàn thành</option>
+            <option value="draft">Bản nháp</option>
+          </select>
+        </div>
+        <button type="submit" class="w-full bg-blue-600 text-white text-sm font-medium py-2 rounded hover:bg-blue-700 transition">
+          Thêm chiến dịch
+        </button>
+      </form>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+      <p class="text-xs text-blue-800">
+        <strong>Lưu ý:</strong> Để tự động đồng bộ số liệu từ Telegram Ads, hãy vào trang <a href="/import" class="underline">Import dữ liệu</a> và upload file CSV/Excel chứa số liệu chiến dịch.
+      </p>
+    </div>
+  </div>
+
+  <!-- Campaigns list -->
+  <div class="lg:col-span-2">
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-sm font-semibold text-gray-700">Danh sách chiến dịch</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-gray-50 text-gray-600">
+            <tr>
+              <th class="px-4 py-3 text-left">Tên chiến dịch</th>
+              <th class="px-4 py-3 text-left">Channel</th>
+              <th class="px-4 py-3 text-right">Ngân sách</th>
+              <th class="px-4 py-3 text-center">Trạng thái</th>
+              <th class="px-4 py-3 text-center"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {% for c in campaigns %}
+            <tr>
+              <td class="px-4 py-3 font-medium">{{ c.name }}</td>
+              <td class="px-4 py-3 text-gray-600">{{ c.channel.name if c.channel else '-' }}</td>
+              <td class="px-4 py-3 text-right">{{ "{:.2f}".format(c.budget) }} {{ c.currency }}</td>
+              <td class="px-4 py-3 text-center">
+                <span class="px-2 py-1 rounded-full text-xs font-medium
+                  {% if c.status == 'active' %}bg-green-100 text-green-700
+                  {% elif c.status == 'paused' %}bg-yellow-100 text-yellow-700
+                  {% elif c.status == 'completed' %}bg-blue-100 text-blue-700
+                  {% else %}bg-gray-100 text-gray-700{% endif %}">
+                  {{ c.status }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-center">
+                <form action="/campaigns/{{ c.id }}/delete" method="post" onsubmit="return confirm('Xóa chiến dịch này?')">
+                  <button type="submit" class="text-red-600 hover:text-red-800 text-xs">Xóa</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

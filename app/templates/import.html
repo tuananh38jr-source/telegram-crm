@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Import dữ liệu - Telegram Ads CRM{% endblock %}
+{% block header %}Import dữ liệu từ sheet{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- Ads stats import -->
+  <div class="bg-white rounded-lg shadow p-6">
+    <h3 class="text-sm font-semibold text-gray-700 mb-2">1. Số liệu quảng cáo</h3>
+    <p class="text-xs text-gray-500 mb-4">Cột: campaign_id/campaign_name, stat_date, impressions, clicks, spend, joins, conversions, revenue...</p>
+    <form class="import-form" data-action="/import/ads" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-3">
+      <button type="submit" class="w-full bg-blue-600 text-white text-sm font-medium py-2 rounded hover:bg-blue-700 transition">
+        Upload số liệu Ads
+      </button>
+    </form>
+    <div class="result mt-3 text-xs hidden"></div>
+  </div>
+
+  <!-- Sales import -->
+  <div class="bg-white rounded-lg shadow p-6">
+    <h3 class="text-sm font-semibold text-gray-700 mb-2">2. Doanh thu bán nhóm</h3>
+    <p class="text-xs text-gray-500 mb-4">Cột: order_code, employee_name, product_name, quantity, unit_price, total_amount, order_date, status...</p>
+    <form class="import-form" data-action="/import/sales" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:bg-green-50 file:text-green-700 hover:file:bg-green-100 mb-3">
+      <button type="submit" class="w-full bg-green-600 text-white text-sm font-medium py-2 rounded hover:bg-green-700 transition">
+        Upload doanh thu
+      </button>
+    </form>
+    <div class="result mt-3 text-xs hidden"></div>
+  </div>
+
+  <!-- Employees import -->
+  <div class="bg-white rounded-lg shadow p-6">
+    <h3 class="text-sm font-semibold text-gray-700 mb-2">3. Danh sách nhân viên</h3>
+    <p class="text-xs text-gray-500 mb-4">Cột: full_name, telegram_username, phone, role, commission_rate...</p>
+    <form class="import-form" data-action="/import/employees" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".csv,.xlsx,.xls" required class="block w-full text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 mb-3">
+      <button type="submit" class="w-full bg-indigo-600 text-white text-sm font-medium py-2 rounded hover:bg-indigo-700 transition">
+        Upload nhân viên
+      </button>
+    </form>
+    <div class="result mt-3 text-xs hidden"></div>
+  </div>
+</div>
+
+<!-- Template download -->
+<div class="mt-8 bg-gray-50 border border-gray-200 rounded-lg p-6">
+  <h3 class="text-sm font-semibold text-gray-700 mb-2">File mẫu</h3>
+  <p class="text-xs text-gray-600 mb-3">Tải file CSV mẫu để đảm bảo đúng định dạng cột trước khi upload.</p>
+  <div class="flex gap-3">
+    <a href="/static/samples/ads_data.csv" download class="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 transition">ads_data.csv</a>
+    <a href="/static/samples/sales_data.csv" download class="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 transition">sales_data.csv</a>
+    <a href="/static/samples/employees_data.csv" download class="text-xs bg-white border border-gray-300 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-100 transition">employees_data.csv</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.import-form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const resultDiv = form.nextElementSibling;
+      resultDiv.classList.remove('hidden');
+      resultDiv.textContent = 'Đang upload...';
+      resultDiv.className = 'result mt-3 text-xs text-blue-600';
+
+      const action = form.dataset.action;
+      const formData = new FormData(form);
+
+      try {
+        const resp = await fetch(action, { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (resp.ok) {
+          resultDiv.className = 'result mt-3 text-xs text-green-700 bg-green-50 p-2 rounded';
+          resultDiv.innerHTML = `Import thành công: <strong>${data.imported}</strong> dòng, bỏ qua: <strong>${data.skipped}</strong>.`;
+          if (data.errors && data.errors.length > 0) {
+            resultDiv.innerHTML += `<br>Lỗi mẫu: ${data.errors.slice(0, 3).join('; ')}`;
+          }
+        } else {
+          resultDiv.className = 'result mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+          resultDiv.textContent = data.detail || 'Có lỗi xảy ra khi upload.';
+        }
+      } catch (err) {
+        resultDiv.className = 'result mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+        resultDiv.textContent = 'Lỗi kết nối: ' + err.message;
+      }
+    });
+  });
+</script>
+{% endblock %}

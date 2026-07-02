@@ -1,0 +1,7 @@
+order_code,customer_telegram_username,employee_name,product_name,quantity,unit_price,total_amount,currency,order_date,status
+ORD001,@trader_a,Nguyen Van A,Gold VIP 30d,1,99,99,USD,2026-07-01,paid
+ORD002,@trader_b,Tran Thi B,Gold VIP 30d,1,99,99,USD,2026-07-01,paid
+ORD003,@trader_c,Nguyen Van A,Gold Pro 90d,1,249,249,USD,2026-07-02,paid
+ORD004,@trader_d,Le Van C,Gold VIP 30d,2,99,198,USD,2026-07-02,paid
+ORD005,@trader_e,Tran Thi B,Gold Pro 90d,1,249,249,USD,2026-07-02,paid
+ORD006,@trader_f,Nguyen Van A,Gold VIP 30d,1,99,99,USD,2026-07-02,paid

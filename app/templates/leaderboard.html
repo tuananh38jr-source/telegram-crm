@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Bảng xếp hạng - Telegram Ads CRM{% endblock %}
+{% block header %}Bảng xếp hạng nhân viên{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex justify-between items-center">
+  <div>
+    <p class="text-sm text-gray-600">Tính điểm theo tháng hiện tại dựa trên doanh thu, số đơn, lead và tỷ lệ chuyển đổi.</p>
+  </div>
+  <form action="/leaderboard/recalculate" method="post">
+    <button type="submit" class="bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded hover:bg-indigo-700 transition">
+      Tính lại điểm
+    </button>
+  </form>
+</div>
+
+<!-- Top 3 -->
+{% if leaderboard|length >= 1 %}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+  {% for emp in leaderboard[:3] %}
+  <div class="bg-white rounded-lg shadow p-6 text-center border-t-4
+    {% if emp.rank == 1 %}border-yellow-400
+    {% elif emp.rank == 2 %}border-gray-400
+    {% else %}border-amber-700{% endif %}">
+    <div class="text-3xl font-bold text-gray-800 mb-1">#{{ emp.rank }}</div>
+    <div class="font-semibold text-gray-800 truncate">{{ emp.full_name }}</div>
+    <div class="text-xs text-gray-500 mb-3">{{ emp.role }}</div>
+    <div class="grid grid-cols-2 gap-2 text-sm">
+      <div class="bg-gray-50 rounded p-2">
+        <div class="font-bold text-gray-800">${{ "{:.0f}".format(emp.revenue) }}</div>
+        <div class="text-xs text-gray-500">Doanh thu</div>
+      </div>
+      <div class="bg-gray-50 rounded p-2">
+        <div class="font-bold text-gray-800">{{ emp.orders_count }}</div>
+        <div class="text-xs text-gray-500">Đơn hàng</div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Full leaderboard -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-200">
+    <h3 class="text-sm font-semibold text-gray-700">Xếp hạng chi tiết</h3>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="min-w-full text-sm">
+      <thead class="bg-gray-50 text-gray-600">
+        <tr>
+          <th class="px-4 py-3 text-center">Hạng</th>
+          <th class="px-4 py-3 text-left">Nhân viên</th>
+          <th class="px-4 py-3 text-right">Điểm</th>
+          <th class="px-4 py-3 text-right">Doanh thu</th>
+          <th class="px-4 py-3 text-center">Đơn hàng</th>
+          <th class="px-4 py-3 text-center">Lead</th>
+          <th class="px-4 py-3 text-right">Tỷ lệ chuyển đổi</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+        {% for emp in leaderboard %}
+        <tr>
+          <td class="px-4 py-3 text-center font-bold text-gray-800">#{{ emp.rank }}</td>
+          <td class="px-4 py-3 font-medium">{{ emp.full_name }}</td>
+          <td class="px-4 py-3 text-right font-semibold text-indigo-600">{{ "{:.0f}".format(emp.score) }}</td>
+          <td class="px-4 py-3 text-right">${{ "{:.0f}".format(emp.revenue) }}</td>
+          <td class="px-4 py-3 text-center">{{ emp.orders_count }}</td>
+          <td class="px-4 py-3 text-center">{{ emp.leads_count }}</td>
+          <td class="px-4 py-3 text-right">{{ "{:.1f}".format(emp.conversion_rate) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
