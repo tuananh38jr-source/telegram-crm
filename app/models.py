@@ -134,3 +134,19 @@ class LeaderboardSnapshot(Base):
     leads_count = Column(Integer, default=0)
     conversion_rate = Column(Float, default=0)
     created_at = Column(DateTime, server_default=func.now())
+
+
+class TelegramAdsAccount(Base):
+    __tablename__ = "telegram_ads_accounts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    account_id = Column(String(100), unique=True, nullable=True)
+    email = Column(String(255), nullable=True)
+    folder_path = Column(String(500), nullable=True)
+    is_active = Column(Boolean, default=True)
+    last_sync_at = Column(DateTime, nullable=True)
+    last_sync_status = Column(String(50), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+

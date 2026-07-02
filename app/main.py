@@ -25,12 +25,15 @@ from app.services.analytics_service import (
     get_employee_leaderboard,
     recalculate_leaderboard,
 )
+from app.scheduler import start_scheduler, stop_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    start_scheduler()
     yield
+    stop_scheduler()
 
 
 app = FastAPI(title="Telegram Ads CRM", lifespan=lifespan)
@@ -303,3 +306,202 @@ async def api_leaderboard(period: str = "monthly", db: Session = Depends(get_db)
 @app.get("/api/revenue-trend")
 async def api_revenue_trend(days: int = 30, db: Session = Depends(get_db)):
     return get_revenue_trend(db, days)
+
+
+# ============================================================
+# Telegram Ads Accounts Management
+# ============================================================
+@app.get("/telegram-ads", response_class=HTMLResponse)
+async def telegram_ads_page(request: Request, db: Session = Depends(get_db)):
+    from app.models import TelegramAdsAccount
+    from app.services.folder_watcher import get_account_folders
+    
+    accounts = db.query(TelegramAdsAccount).order_by(TelegramAdsAccount.created_at.desc()).all()
+    folders = get_account_folders()
+    
+    return templates.TemplateResponse("telegram_ads.html", {
+        "request": request,
+        "accounts": accounts,
+        "folders": folders,
+    })
+
+
+@app.post("/telegram-ads/accounts")
+async def create_ads_account(
+    name: str = Form(...),
+    account_id: str = Form(None),
+    email: str = Form(None),
+    db: Session = Depends(get_db),
+):
+    from app.models import TelegramAdsAccount
+    from app.services.folder_watcher import create_account_folder
+    
+    # Tạo account trong database
+    account = TelegramAdsAccount(
+        name=name,
+        account_id=account_id,
+        email=email,
+        is_active=True,
+    )
+    db.add(account)
+    db.flush()
+    
+    # Tạo folder
+    folder_path = create_account_folder(
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_accounts'),
+        name
+    )
+    account.folder_path = folder_path
+    db.commit()
+    
+    return RedirectResponse(url="/telegram-ads", status_code=303)
+
+
+@app.post("/telegram-ads/upload/{account_name}")
+async def upload_ads_csv(
+    account_name: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    from app.services.folder_watcher import FolderWatcher
+    
+    # Lưu file vào account folder
+    base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_accounts')
+    account_dir = os.path.join(base_dir, account_name)
+    os.makedirs(account_dir, exist_ok=True)
+    
+    file_path = os.path.join(account_dir, file.filename)
+    with open(file_path, 'wb') as f:
+        content = await file.read()
+        f.write(content)
+    
+    # Import ngay
+    watcher = FolderWatcher(base_dir)
+    result = watcher.process_csv_file(db, file_path, account_name)
+    
+    return JSONResponse(content=result)
+
+
+@app.post("/telegram-ads/upload-dual/{account_name}")
+async def upload_ads_dual_files(
+    account_name: str,
+    views_file: UploadFile = File(...),
+    budget_file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload 2 files CSV cùng lúc (Views + Budget) từ Telegram Ads.
+    Format thực tế: tab-separated, European decimal, date "DD Mon YYYY".
+    """
+    from app.services.telegram_ads_parser import TelegramAdsCSVParser
+    
+    # Đọc nội dung 2 files
+    views_content = await views_file.read()
+    budget_content = await budget_file.read()
+    
+    # Parse dual files
+    parser = TelegramAdsCSVParser()
+    result = parser.parse_telegram_ads_dual_files(views_content, budget_content)
+    
+    if not result['success']:
+        return JSONResponse(content=result)
+    
+    # Lưu files vào account folder
+    base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_accounts')
+    account_dir = os.path.join(base_dir, account_name)
+    os.makedirs(account_dir, exist_ok=True)
+    
+    with open(os.path.join(account_dir, views_file.filename), 'wb') as f:
+        f.write(views_content)
+    with open(os.path.join(account_dir, budget_file.filename), 'wb') as f:
+        f.write(budget_content)
+    
+    # Import data vào database
+    imported_count = 0
+    for item in result['data']:
+        stat_date = item.get('stat_date')
+        
+        # Tìm hoặc tạo campaign cho account này
+        campaign = db.query(Campaign).filter(
+            Campaign.name == f"Telegram Ads - {account_name}"
+        ).first()
+        
+        if not campaign:
+            campaign = Campaign(
+                name=f"Telegram Ads - {account_name}",
+                status='active',
+            )
+            db.add(campaign)
+            db.flush()
+        
+        # Check existing stat for this date
+        existing_stat = db.query(AdStat).filter(
+            AdStat.campaign_id == campaign.id,
+            AdStat.stat_date == stat_date,
+        ).first()
+        
+        if existing_stat:
+            # Update existing
+            existing_stat.impressions = item.get('impressions', 0)
+            existing_stat.clicks = item.get('clicks', 0)
+            existing_stat.spend = item.get('spend', 0)
+            existing_stat.conversions = item.get('conversions', 0)
+            existing_stat.updated_at = datetime.now()
+        else:
+            # Tạo mới
+            stat = AdStat(
+                campaign_id=campaign.id,
+                stat_date=stat_date,
+                impressions=item.get('impressions', 0),
+                clicks=item.get('clicks', 0),
+                spend=item.get('spend', 0),
+                conversions=item.get('conversions', 0),
+            )
+            db.add(stat)
+        
+        imported_count += 1
+    
+    # Update last_sync cho account
+    from app.models import TelegramAdsAccount
+    ads_account = db.query(TelegramAdsAccount).filter(
+        TelegramAdsAccount.name == account_name
+    ).first()
+    if ads_account:
+        ads_account.last_sync_at = datetime.now()
+        ads_account.last_sync_status = 'success'
+    
+    db.commit()
+    
+    # Tính summary
+    total_impressions = sum(i.get('impressions', 0) for i in result['data'])
+    total_clicks = sum(i.get('clicks', 0) for i in result['data'])
+    total_conversions = sum(i.get('conversions', 0) for i in result['data'])
+    total_spend = sum(i.get('spend', 0) for i in result['data'])
+    
+    return JSONResponse(content={
+        'success': True,
+        'imported': imported_count,
+        'format': 'telegram_ads_dual_files',
+        'files': {
+            'views': views_file.filename,
+            'budget': budget_file.filename,
+        },
+        'summary': {
+            'total_impressions': total_impressions,
+            'total_clicks': total_clicks,
+            'total_conversions': total_conversions,
+            'total_spend': round(total_spend, 2),
+        },
+    })
+
+
+@app.post("/telegram-ads/scan")
+async def manual_scan_ads_csv(db: Session = Depends(get_db)):
+    from app.services.folder_watcher import FolderWatcher
+    
+    base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_accounts')
+    watcher = FolderWatcher(base_dir)
+    result = watcher.scan_and_import(db)
+    
+    return JSONResponse(content=result)
+

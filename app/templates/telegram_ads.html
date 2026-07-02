@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Telegram Ads - CRM{% endblock %}
+{% block header %}Quản lý Telegram Ads Accounts{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <!-- Add account form -->
+  <div class="lg:col-span-1">
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-sm font-semibold text-gray-700 mb-4">Thêm Account Telegram Ads</h3>
+      <form action="/telegram-ads/accounts" method="post" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Tên account</label>
+          <input type="text" name="name" required placeholder="VD: Account 1" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Account ID (optional)</label>
+          <input type="text" name="account_id" placeholder="VD: 123456" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Email (optional)</label>
+          <input type="email" name="email" placeholder="user@example.com" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <button type="submit" class="w-full bg-blue-600 text-white text-sm font-medium py-2 rounded hover:bg-blue-700 transition">
+          Thêm Account
+        </button>
+      </form>
+    </div>
+
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+      <p class="text-xs text-blue-800 mb-2">
+        <strong>Cách sử dụng:</strong>
+      </p>
+      <ol class="text-xs text-blue-800 list-decimal list-inside space-y-1">
+        <li>Tạo account ở form bên phải</li>
+        <li>Vào ads.telegram.org → Statistics → export 2 file CSV:
+          <br><span class="text-blue-600 ml-4">• File Views: chọn "Days" → Export</span>
+          <br><span class="text-blue-600 ml-4">• File Budget: chọn "Days" + tick "Spent budget" → Export</span>
+        </li>
+        <li>Upload cả 2 files vào account tương ứng</li>
+        <li>Hệ thống tự merge theo ngày và hiển thị tổng hợp</li>
+      </ol>
+    </div>
+
+    <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-3">
+      <p class="text-xs text-amber-800 mb-1">
+        <strong>Format CSV thực tế:</strong>
+      </p>
+      <ul class="text-xs text-amber-800 list-disc list-inside space-y-0.5">
+        <li>Tab-separated (không phải comma)</li>
+        <li>Ngày: "30 Dec 2025"</li>
+        <li>Số thập phân: "23,3973" (= 23.3973)</li>
+        <li>File budget có chữ "budget" trong tên</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Accounts list & upload -->
+  <div class="lg:col-span-2">
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+        <h3 class="text-sm font-semibold text-gray-700">Danh sách Accounts</h3>
+        <button onclick="scanAll()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700 transition">
+          Scan tất cả folder
+        </button>
+      </div>
+
+      {% if accounts %}
+      <div class="divide-y divide-gray-100">
+        {% for account in accounts %}
+        <div class="p-6">
+          <div class="flex justify-between items-start mb-4">
+            <div>
+              <h4 class="font-semibold text-gray-800">{{ account.name }}</h4>
+              <p class="text-xs text-gray-500 mt-1">
+                {% if account.email %}{{ account.email }} · {% endif %}
+                {% if account.last_sync_at %}
+                  Sync lần cuối: {{ account.last_sync_at.strftime('%d/%m/%Y %H:%M') }}
+                  {% if account.last_sync_status == 'success' %}
+                    <span class="text-green-600">✓</span>
+                  {% else %}
+                    <span class="text-red-600">✗</span>
+                  {% endif %}
+                {% else %}
+                  Chưa sync
+                {% endif %}
+              </p>
+            </div>
+          </div>
+
+          <!-- Dual file upload form (Views + Budget) -->
+          <form class="upload-dual-form" data-account="{{ account.name }}">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              <div class="border border-gray-200 rounded p-3">
+                <label class="block text-xs font-medium text-gray-600 mb-1">
+                  File Views (số lượt xem, clicks, actions)
+                </label>
+                <input type="file" name="views_file" accept=".csv" required class="w-full text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-2 file:rounded file:border-0 file:bg-green-50 file:text-green-700 hover:file:bg-green-100">
+                <p class="text-[10px] text-gray-400 mt-1">VD: Thu_Ha_20260702_days.csv</p>
+              </div>
+              <div class="border border-gray-200 rounded p-3">
+                <label class="block text-xs font-medium text-gray-600 mb-1">
+                  File Budget (chi phí TON)
+                </label>
+                <input type="file" name="budget_file" accept=".csv" required class="w-full text-xs text-gray-600 file:mr-2 file:py-1.5 file:px-2 file:rounded file:border-0 file:bg-amber-50 file:text-amber-700 hover:file:bg-amber-100">
+                <p class="text-[10px] text-gray-400 mt-1">VD: Thu_Ha_budget_20260702_days.csv</p>
+              </div>
+            </div>
+            <button type="submit" class="text-xs bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+              Upload & Import 2 Files
+            </button>
+          </form>
+
+          <div class="upload-result mt-3 text-xs hidden"></div>
+
+          <!-- Single file upload (fallback) -->
+          <details class="mt-3">
+            <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Upload 1 file CSV đơn (format cũ)</summary>
+            <form class="upload-form mt-2 flex items-center gap-3" data-account="{{ account.name }}">
+              <input type="file" name="file" accept=".csv" required class="flex-1 text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+              <button type="submit" class="text-xs bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition whitespace-nowrap">
+                Upload 1 File
+              </button>
+            </form>
+          </details>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="p-12 text-center text-gray-500">
+        <p class="text-sm">Chưa có account nào</p>
+        <p class="text-xs mt-2">Thêm account Telegram Ads đầu tiên ở form bên trái</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Upload dual files (Views + Budget)
+  document.querySelectorAll('.upload-dual-form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const accountName = form.dataset.account;
+      const resultDiv = form.nextElementSibling;
+      resultDiv.classList.remove('hidden');
+      resultDiv.textContent = 'Đang upload và merge 2 files...';
+      resultDiv.className = 'upload-result mt-3 text-xs text-blue-600';
+
+      const formData = new FormData();
+      formData.append('views_file', form.querySelector('[name="views_file"]').files[0]);
+      formData.append('budget_file', form.querySelector('[name="budget_file"]').files[0]);
+
+      try {
+        const resp = await fetch(`/telegram-ads/upload-dual/${accountName}`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+        if (data.success) {
+          const totalViews = data.summary?.total_impressions?.toLocaleString() || '?';
+          const totalClicks = data.summary?.total_clicks?.toLocaleString() || '?';
+          const totalActions = data.summary?.total_conversions?.toLocaleString() || '?';
+          const totalSpend = data.summary?.total_spend?.toFixed(2) || '?';
+          resultDiv.className = 'upload-result mt-3 text-xs text-green-700 bg-green-50 p-3 rounded';
+          resultDiv.innerHTML = `
+            <div class="font-semibold mb-1">✓ Import thành công ${data.imported} ngày</div>
+            <div class="grid grid-cols-2 gap-1 text-[11px]">
+              <span>👁 Views: <strong>${totalViews}</strong></span>
+              <span>🖱 Clicks: <strong>${totalClicks}</strong></span>
+              <span>🎯 Actions: <strong>${totalActions}</strong></span>
+              <span>💰 Budget: <strong>${totalSpend} TON</strong></span>
+            </div>
+          `;
+        } else {
+          resultDiv.className = 'upload-result mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+          resultDiv.textContent = `✗ Lỗi: ${data.error}`;
+        }
+      } catch (err) {
+        resultDiv.className = 'upload-result mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+        resultDiv.textContent = 'Lỗi kết nối: ' + err.message;
+      }
+    });
+  });
+
+  // Upload single CSV (fallback)
+  document.querySelectorAll('.upload-form').forEach(form => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const accountName = form.dataset.account;
+      const resultDiv = form.closest('details').parentElement.querySelector('.upload-result');
+      resultDiv.classList.remove('hidden');
+      resultDiv.textContent = 'Đang upload...';
+      resultDiv.className = 'upload-result mt-3 text-xs text-blue-600';
+
+      const formData = new FormData(form);
+
+      try {
+        const resp = await fetch(`/telegram-ads/upload/${accountName}`, {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+        if (data.success) {
+          resultDiv.className = 'upload-result mt-3 text-xs text-green-700 bg-green-50 p-2 rounded';
+          resultDiv.innerHTML = `✓ Import thành công: <strong>${data.imported}</strong> dòng`;
+        } else {
+          resultDiv.className = 'upload-result mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+          resultDiv.textContent = `✗ Lỗi: ${data.error}`;
+        }
+      } catch (err) {
+        resultDiv.className = 'upload-result mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+        resultDiv.textContent = 'Lỗi kết nối: ' + err.message;
+      }
+    });
+  });
+
+  // Scan all folders
+  async function scanAll() {
+    if (!confirm('Scan tất cả folder Telegram Ads?')) return;
+
+    try {
+      const resp = await fetch('/telegram-ads/scan', { method: 'POST' });
+      const data = await resp.json();
+      alert(`Scan xong:\n${data.accounts_scanned} accounts\n${data.total_imported} rows imported`);
+      location.reload();
+    } catch (err) {
+      alert('Lỗi: ' + err.message);
+    }
+  }
+</script>
+{% endblock %}
