@@ -4,6 +4,56 @@
 {% block header %}Quản lý Telegram Ads Accounts{% endblock %}
 
 {% block content %}
+
+<!-- LOGIN TELEGRAM ADS Section -->
+<div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-lg p-6 mb-6">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-white text-lg font-bold">Login Telegram Ads</h2>
+      <p class="text-blue-100 text-sm mt-1">Đăng nhập để tự động export CSV từ ads.telegram.org</p>
+    </div>
+    <button onclick="loginTelegramAds()" class="bg-white text-blue-700 font-bold px-6 py-3 rounded-lg hover:bg-blue-50 transition shadow-md text-sm">
+      LOGIN TELEGRAM ADS
+    </button>
+  </div>
+
+  <!-- Import lock status -->
+  <div id="import-lock-banner" class="hidden mt-4 bg-yellow-100 border border-yellow-300 rounded p-3">
+    <p class="text-yellow-800 text-xs font-medium">
+      <span id="lock-message">Đang import...</span>
+    </p>
+  </div>
+
+  <!-- Login flow steps (collapsible) -->
+  <details class="mt-4">
+    <summary class="text-blue-100 text-xs cursor-pointer hover:text-white">Hướng dẫn chi tiết cách login</summary>
+    <div class="mt-3 bg-white/10 rounded-lg p-4 text-white text-xs space-y-3">
+      <div>
+        <p class="font-semibold mb-2">Cách 1: Login trực tiếp (nhanh nhất)</p>
+        <ol class="list-decimal list-inside space-y-1 text-blue-100">
+          <li>Nhấn nút <strong class="text-white">"LOGIN TELEGRAM ADS"</strong> ở trên → tab mới mở ads.telegram.org</li>
+          <li>Đăng nhập bằng số điện thoại Telegram → nhập mã xác nhận</li>
+          <li>Sau khi vào được dashboard, mở Console (nhấn <kbd class="bg-blue-800 px-1 rounded">F12</kbd> → tab Console)</li>
+          <li>Dán dòng code sau và nhấn Enter:</li>
+        </ol>
+        <div class="mt-2 bg-gray-900 rounded p-3 font-mono text-green-400 text-[11px] overflow-x-auto">
+          <code id="bookmarklet-code">fetch('{{ request.base_url }}telegram-ads/save-cookie', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({account_name: document.querySelector('[class*="user"]')?.textContent?.trim() || prompt('Nhập tên account CRM:'), cookies: document.cookie, url: location.href})}).then(r=>r.json()).then(d=>alert(d.message||d.error)).catch(e=>alert('Lỗi: '+e.message))</code>
+        </div>
+        <button onclick="copyBookmarkletCode()" class="mt-2 bg-blue-500 text-white text-[11px] px-3 py-1 rounded hover:bg-blue-400 transition">
+          Copy code
+        </button>
+      </div>
+      <div>
+        <p class="font-semibold mb-2">Cách 2: Upload cookie file (nếu đã chạy script local)</p>
+        <ol class="list-decimal list-inside space-y-1 text-blue-100">
+          <li>Chạy trên máy: <code class="bg-blue-800 px-1 rounded">python telegram_ads_auto_export.py --login --account "Tên"</code></li>
+          <li>Upload file .json cookie ở form bên dưới</li>
+        </ol>
+      </div>
+    </div>
+  </details>
+</div>
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
   <!-- Add account form -->
   <div class="lg:col-span-1">
@@ -372,5 +422,53 @@
       alert('Lỗi kết nối: ' + err.message);
     }
   }
+
+  // LOGIN TELEGRAM ADS - opens new tab
+  function loginTelegramAds() {
+    const w = window.open('https://ads.telegram.org', '_blank', 'width=1200,height=800');
+    if (!w) {
+      alert('Trình duyệt chặn popup. Hãy cho phép popup cho trang này.');
+      return;
+    }
+    // Show reminder
+    setTimeout(() => {
+      alert('Sau khi đăng nhập xong tại tab mới:\n1. Nhấn F12 → Console\n2. Copy code ở phần "Hướng dẫn" trên trang CRM\n3. Dán vào Console và nhấn Enter\n\nCookies sẽ được lưu tự động!');
+    }, 1000);
+  }
+
+  // Copy bookmarklet code to clipboard
+  function copyBookmarkletCode() {
+    const code = document.getElementById('bookmarklet-code').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+      alert('Đã copy code!\n\nBây giờ:\n1. Mở tab ads.telegram.org (đã login)\n2. Nhấn F12 → Console\n3. Dán (Ctrl+V) và nhấn Enter');
+    }).catch(() => {
+      // Fallback
+      const textarea = document.createElement('textarea');
+      textarea.value = code;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      alert('Đã copy code!');
+    });
+  }
+
+  // Check import lock status
+  async function checkImportLock() {
+    try {
+      const resp = await fetch('/telegram-ads/import-lock');
+      const data = await resp.json();
+      const banner = document.getElementById('import-lock-banner');
+      const msg = document.getElementById('lock-message');
+      if (data.active) {
+        banner.classList.remove('hidden');
+        msg.textContent = `⏳ Đang import account "${data.account}" — chờ xong trước khi import account khác`;
+      } else {
+        banner.classList.add('hidden');
+      }
+    } catch (e) {}
+  }
+  checkImportLock();
+  setInterval(checkImportLock, 10000);
 </script>
 {% endblock %}

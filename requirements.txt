@@ -11,3 +11,5 @@ pydantic==2.7.3
 apscheduler==3.10.4
 playwright==1.44.0
 gspread==6.1.2
+google-api-python-client==2.134.0
+google-auth==2.30.0

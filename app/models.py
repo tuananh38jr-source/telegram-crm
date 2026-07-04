@@ -145,8 +145,27 @@ class TelegramAdsAccount(Base):
     email = Column(String(255), nullable=True)
     folder_path = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True)
+    login_status = Column(String(50), default="none")  # none | cookie_present | logged_in | expired
+    cookie_path = Column(String(500), nullable=True)
+    orgs_count = Column(Integer, default=0)
     last_sync_at = Column(DateTime, nullable=True)
     last_sync_status = Column(String(50), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class GoogleDocsReport(Base):
+    __tablename__ = "google_docs_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    doc_id = Column(String(255), nullable=True)
+    title = Column(String(500), nullable=True)
+    doc_url = Column(String(1000), nullable=True)
+    report_type = Column(String(100), default="operations_report")
+    full_text = Column(Text, nullable=True)
+    parsed_data = Column(Text, nullable=True)  # JSON string
+    channels_found = Column(Integer, default=0)
+    tables_found = Column(Integer, default=0)
+    metrics_summary = Column(Text, nullable=True)  # JSON string
+    scanned_at = Column(DateTime, server_default=func.now())
 

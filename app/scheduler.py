@@ -108,20 +108,38 @@ async def job_sync_google_sheets():
     logger.info(f"[{datetime.now()}] Bat dau sync Google Sheets...")
     try:
         from app.services.google_sheets_service import sync_from_sheet
-        db = SessionLocal()
-        try:
-            result = sync_from_sheet(db)
-            logger.info(
-                f"[{datetime.now()}] Google Sheets sync: "
-                f"{result.get('total_imported', 0)} rows, "
-                f"{len(result.get('sheets', []))} sheets"
-            )
-        finally:
-            db.close()
+        result = sync_from_sheet()
+        logger.info(
+            f"[{datetime.now()}] Google Sheets sync: "
+            f"{result.get('total_imported', 0)} rows imported, "
+            f"{result.get('sheets_synced', 0)} sheets"
+        )
     except ImportError:
         logger.warning(f"[{datetime.now()}] gspread chua duoc cai, bo qua Google Sheets sync")
     except Exception as e:
         logger.error(f"[{datetime.now()}] Loi sync Google Sheets: {e}")
+
+
+async def job_scan_google_docs():
+    """
+    Job: Quet Google Docs (bao cao van han) va phan tich.
+    Chay moi 6 tieng.
+    """
+    logger.info(f"[{datetime.now()}] Bat dau scan Google Docs...")
+    try:
+        from app.services.google_docs_service import sync_google_docs
+        result = sync_google_docs()
+        if result.get('ok'):
+            logger.info(
+                f"[{datetime.now()}] Google Docs scan: "
+                f"{result.get('docs_scanned', 0)} docs scanned"
+            )
+        else:
+            logger.warning(f"[{datetime.now()}] Google Docs scan error: {result.get('error')}")
+    except ImportError:
+        logger.warning(f"[{datetime.now()}] google-api-python-client chua duoc cai, bo qua Google Docs scan")
+    except Exception as e:
+        logger.error(f"[{datetime.now()}] Loi scan Google Docs: {e}")
 
 
 def start_scheduler():
@@ -161,6 +179,15 @@ def start_scheduler():
         trigger=IntervalTrigger(hours=4),
         id='sync_google_sheets',
         name='Sync Google Sheets (Sales + Employees)',
+        replace_existing=True,
+    )
+
+    # Job 5: Scan Google Docs mỗi 6 tiếng (báo cáo vận hành)
+    scheduler.add_job(
+        job_scan_google_docs,
+        trigger=IntervalTrigger(hours=6),
+        id='scan_google_docs',
+        name='Scan Google Docs (Reports)',
         replace_existing=True,
     )
     

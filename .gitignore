@@ -14,3 +14,7 @@ build/
 .vscode/
 *.log
 crm.db
+service_account.json
+telegram_ads_cookies/
+telegram_ads_accounts/
+google_docs_reports/

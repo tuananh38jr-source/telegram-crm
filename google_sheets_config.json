@@ -1,6 +1,14 @@
 {
     "service_account_key": "service_account.json",
     "sync_interval_minutes": 60,
+    "google_docs": [
+        {
+            "name": "Báo cáo vận hành",
+            "doc_url": "",
+            "enabled": true,
+            "data_type": "operations_report"
+        }
+    ],
     "sheets": [
         {
             "name": "Sales Data (Doanh thu)",

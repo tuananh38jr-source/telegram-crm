@@ -78,20 +78,33 @@ def save_config(config: dict, config_path: str = None) -> str:
     return path
 
 
-def get_service_account_key(config: dict) -> str:
+def get_service_account_key(config: dict):
     """
-    Resolve the service account JSON key path from the config.
+    Resolve the service account JSON key.
 
-    The key path can be absolute or relative to the project root.
+    Priority:
+    1. GOOGLE_SERVICE_ACCOUNT_JSON env var (JSON string — for Railway/cloud)
+    2. File path from config (for local development)
 
     Returns:
-        Absolute path to the service account JSON key file.
+        Either a dict (parsed JSON from env var) or a str (file path).
     """
+    # Check environment variable first (for Railway deployment)
+    env_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    if env_json:
+        try:
+            key_dict = json.loads(env_json)
+            logger.info("Using service account from GOOGLE_SERVICE_ACCOUNT_JSON env var")
+            return key_dict
+        except json.JSONDecodeError as e:
+            logger.warning("GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: %s", e)
+
+    # Fall back to config file path
     key_path = config.get("service_account_key", "")
     if not key_path:
         raise ValueError(
-            "service_account_key is empty in config. "
-            "Set it to the path of your Google service account JSON key."
+            "service_account_key is empty in config and "
+            "GOOGLE_SERVICE_ACCOUNT_JSON env var is not set."
         )
     if not os.path.isabs(key_path):
         key_path = os.path.join(_PROJECT_ROOT, key_path)

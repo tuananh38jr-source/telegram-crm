@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Google Docs - CRM{% endblock %}
+{% block header %}Quét Google Docs - Báo cáo vận hành{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+  <!-- Left: Add doc + scan form -->
+  <div class="lg:col-span-1 space-y-4">
+
+    <!-- Scan a document -->
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-sm font-semibold text-gray-700 mb-4">Quét Google Docs</h3>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">URL Google Docs</label>
+          <input type="url" id="scan-doc-url" placeholder="https://docs.google.com/document/d/..." class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <button onclick="scanDocument()" id="scan-btn" class="w-full bg-blue-600 text-white text-sm font-medium py-2 rounded hover:bg-blue-700 transition">
+          Quét & Phân tích
+        </button>
+      </div>
+      <div id="scan-result" class="mt-3 text-xs hidden"></div>
+    </div>
+
+    <!-- Add to config -->
+    <div class="bg-white rounded-lg shadow p-6">
+      <h3 class="text-sm font-semibold text-gray-700 mb-4">Thêm Doc vào danh sách tự động</h3>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">Tên báo cáo</label>
+          <input type="text" id="config-doc-name" placeholder="VD: Báo cáo vận hành tuần 1" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">URL Google Docs</label>
+          <input type="url" id="config-doc-url" placeholder="https://docs.google.com/document/d/..." class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        </div>
+        <button onclick="addDocConfig()" class="w-full bg-green-600 text-white text-sm font-medium py-2 rounded hover:bg-green-700 transition">
+          Lưu vào danh sách
+        </button>
+      </div>
+      <div id="config-result" class="mt-3 text-xs hidden"></div>
+    </div>
+
+    <!-- Configured docs list -->
+    <div class="bg-white rounded-lg shadow p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-sm font-semibold text-gray-700">Danh sách Docs đã cấu hình</h3>
+        <button onclick="scanAllDocs()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700 transition">
+          Quét tất cả
+        </button>
+      </div>
+      <div id="configured-docs" class="space-y-2">
+        {% if docs_config %}
+          {% for doc in docs_config %}
+          <div class="flex items-center justify-between bg-gray-50 rounded p-2">
+            <div>
+              <p class="text-xs font-medium text-gray-800">{{ doc.name }}</p>
+              <p class="text-[10px] text-gray-500 truncate max-w-[200px]">{{ doc.doc_url or 'Chưa có URL' }}</p>
+            </div>
+            {% if doc.enabled %}
+            <span class="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded">Active</span>
+            {% else %}
+            <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded">Disabled</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-xs text-gray-500 text-center py-4">Chưa có doc nào. Thêm ở form trên.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Guide -->
+    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <p class="text-xs text-blue-800 mb-2"><strong>Cách sử dụng:</strong></p>
+      <ol class="text-xs text-blue-800 list-decimal list-inside space-y-1">
+        <li>Mở Google Docs báo cáo cần quét</li>
+        <li>Chia sẻ doc cho service account: <code class="text-[11px] bg-blue-100 px-1 rounded">halkeyes-361@dnasuccess-bot.iam.gserviceaccount.com</code></li>
+        <li>Copy URL doc và dán vào ô trên</li>
+        <li>Nhấn "Quét & Phân tích" để đọc nội dung</li>
+        <li>Thêm vào danh sách để tự động quét mỗi 4 tiếng</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- Right: Scanned reports -->
+  <div class="lg:col-span-2">
+    <div class="bg-white rounded-lg shadow overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-sm font-semibold text-gray-700">Lịch sử báo cáo đã quét</h3>
+      </div>
+
+      {% if reports %}
+      <div class="divide-y divide-gray-100">
+        {% for report in reports %}
+        <div class="p-6">
+          <div class="flex justify-between items-start">
+            <div>
+              <h4 class="font-semibold text-gray-800">{{ report.title or 'Báo cáo chưa đặt tên' }}</h4>
+              <p class="text-xs text-gray-500 mt-1">
+                Quét lúc: {{ report.scanned_at.strftime('%d/%m/%Y %H:%M') if report.scanned_at else 'N/A' }}
+                {% if report.doc_url %}
+                · <a href="{{ report.doc_url }}" target="_blank" class="text-blue-600 hover:underline">Mở Doc</a>
+                {% endif %}
+              </p>
+            </div>
+            <button onclick="viewReport({{ report.id }})" class="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded hover:bg-gray-200 transition">
+              Xem chi tiết
+            </button>
+          </div>
+
+          <div class="mt-3 grid grid-cols-3 gap-3">
+            <div class="bg-blue-50 rounded p-2 text-center">
+              <p class="text-lg font-bold text-blue-700">{{ report.channels_found or 0 }}</p>
+              <p class="text-[10px] text-blue-600">Channels</p>
+            </div>
+            <div class="bg-green-50 rounded p-2 text-center">
+              <p class="text-lg font-bold text-green-700">{{ report.tables_found or 0 }}</p>
+              <p class="text-[10px] text-green-600">Bảng dữ liệu</p>
+            </div>
+            <div class="bg-purple-50 rounded p-2 text-center">
+              <p class="text-lg font-bold text-purple-700">{{ report.report_type or 'report' }}</p>
+              <p class="text-[10px] text-purple-600">Loại</p>
+            </div>
+          </div>
+
+          {% if report.metrics_summary %}
+          <div class="mt-3" id="metrics-{{ report.id }}">
+            <details>
+              <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700">Xem metrics</summary>
+              <div class="mt-2 bg-gray-50 rounded p-3 text-xs text-gray-700">
+                <pre class="whitespace-pre-wrap">{{ report.metrics_summary }}</pre>
+              </div>
+            </details>
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="p-12 text-center text-gray-500">
+        <p class="text-sm">Chưa quét báo cáo nào</p>
+        <p class="text-xs mt-2">Dán URL Google Docs ở form bên trái và nhấn "Quét & Phân tích"</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Report detail modal -->
+<div id="report-modal" class="fixed inset-0 bg-black/50 hidden z-50 flex items-center justify-center">
+  <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[80vh] overflow-auto">
+    <div class="p-6">
+      <div class="flex justify-between items-center mb-4">
+        <h3 id="modal-title" class="text-lg font-bold text-gray-800">Chi tiết báo cáo</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+      </div>
+      <div id="modal-content" class="text-sm text-gray-700">
+        <p>Đang tải...</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function scanDocument() {
+    const url = document.getElementById('scan-doc-url').value.trim();
+    if (!url) {
+      alert('Vui lòng nhập URL Google Docs');
+      return;
+    }
+
+    const btn = document.getElementById('scan-btn');
+    const resultDiv = document.getElementById('scan-result');
+    btn.disabled = true;
+    btn.textContent = 'Đang quét...';
+    resultDiv.classList.remove('hidden');
+    resultDiv.className = 'mt-3 text-xs text-blue-600';
+    resultDiv.textContent = 'Đang kết nối Google Docs API...';
+
+    try {
+      const resp = await fetch('/google-docs/scan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({doc_url: url}),
+      });
+      const data = await resp.json();
+
+      if (data.success) {
+        resultDiv.className = 'mt-3 text-xs text-green-700 bg-green-50 p-3 rounded';
+        let html = `<div class="font-semibold mb-2">Quet thanh cong: ${data.title || 'N/A'}</div>`;
+        html += `<div class="grid grid-cols-2 gap-1 text-[11px]">`;
+        html += `<span>Channels: <strong>${data.channels_found}</strong></span>`;
+        html += `<span>Tables: <strong>${data.tables_found}</strong></span>`;
+        html += `<span>Sections: <strong>${data.sections_found}</strong></span>`;
+        html += `</div>`;
+        if (data.metrics && Object.keys(data.metrics).length > 0) {
+          html += `<div class="mt-2"><strong>Metrics:</strong><pre class="text-[10px] mt-1 bg-white p-2 rounded">${JSON.stringify(data.metrics, null, 2)}</pre></div>`;
+        }
+        if (data.channels && data.channels.length > 0) {
+          html += `<div class="mt-2"><strong>Channels:</strong><ul class="text-[11px] list-disc list-inside">`;
+          data.channels.forEach(ch => {
+            html += `<li>${ch.name}: ${ch.members || '?'} members</li>`;
+          });
+          html += `</ul></div>`;
+        }
+        resultDiv.innerHTML = html;
+      } else {
+        resultDiv.className = 'mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+        resultDiv.textContent = `Loi: ${data.error}`;
+      }
+    } catch (err) {
+      resultDiv.className = 'mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+      resultDiv.textContent = 'Loi ket noi: ' + err.message;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Quet & Phan tich';
+  }
+
+  async function addDocConfig() {
+    const name = document.getElementById('config-doc-name').value.trim();
+    const url = document.getElementById('config-doc-url').value.trim();
+    const resultDiv = document.getElementById('config-result');
+
+    if (!name || !url) {
+      alert('Vui long nhap ten va URL');
+      return;
+    }
+
+    try {
+      const resp = await fetch('/google-docs/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name, doc_url: url}),
+      });
+      const data = await resp.json();
+      resultDiv.classList.remove('hidden');
+      if (data.success) {
+        resultDiv.className = 'mt-3 text-xs text-green-700 bg-green-50 p-2 rounded';
+        resultDiv.textContent = data.message;
+        setTimeout(() => location.reload(), 1500);
+      } else {
+        resultDiv.className = 'mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+        resultDiv.textContent = data.error;
+      }
+    } catch (err) {
+      resultDiv.className = 'mt-3 text-xs text-red-700 bg-red-50 p-2 rounded';
+      resultDiv.textContent = 'Loi: ' + err.message;
+    }
+  }
+
+  async function scanAllDocs() {
+    if (!confirm('Quet tat ca Google Docs da cau hinh?')) return;
+
+    try {
+      const resp = await fetch('/google-docs/scan-all', {method: 'POST'});
+      const data = await resp.json();
+      if (data.ok) {
+        alert(`Quet xong ${data.docs_scanned} docs`);
+        location.reload();
+      } else {
+        alert('Loi: ' + (data.error || 'Unknown'));
+      }
+    } catch (err) {
+      alert('Loi ket noi: ' + err.message);
+    }
+  }
+
+  async function viewReport(reportId) {
+    const modal = document.getElementById('report-modal');
+    const title = document.getElementById('modal-title');
+    const content = document.getElementById('modal-content');
+    modal.classList.remove('hidden');
+    content.innerHTML = '<p>Dang tai...</p>';
+
+    try {
+      const resp = await fetch(`/google-docs/reports/${reportId}`);
+      const data = await resp.json();
+      title.textContent = data.title || 'Bao cao';
+
+      let html = '';
+      if (data.parsed_data) {
+        const pd = data.parsed_data;
+        if (pd.metrics && Object.keys(pd.metrics).length > 0) {
+          html += '<div class="mb-4"><h4 class="font-semibold text-sm mb-2">Metrics</h4>';
+          html += '<div class="grid grid-cols-2 gap-2">';
+          for (const [key, val] of Object.entries(pd.metrics)) {
+            html += `<div class="bg-gray-50 rounded p-2"><span class="text-xs text-gray-500">${key}</span><br><strong>${val}</strong></div>`;
+          }
+          html += '</div></div>';
+        }
+        if (pd.channels && pd.channels.length > 0) {
+          html += '<div class="mb-4"><h4 class="font-semibold text-sm mb-2">Channels</h4>';
+          html += '<table class="w-full text-xs"><thead><tr class="bg-gray-100"><th class="p-2 text-left">Channel</th><th class="p-2 text-right">Members</th></tr></thead><tbody>';
+          pd.channels.forEach(ch => {
+            html += `<tr class="border-b"><td class="p-2">${ch.name}</td><td class="p-2 text-right">${ch.members || '?'}</td></tr>`;
+          });
+          html += '</tbody></table></div>';
+        }
+        if (pd.raw_sections && pd.raw_sections.length > 0) {
+          html += '<div class="mb-4"><h4 class="font-semibold text-sm mb-2">Sections</h4>';
+          pd.raw_sections.forEach(sec => {
+            html += `<details class="mb-1"><summary class="text-xs cursor-pointer text-gray-600">${sec.heading || '(no heading)'} [${sec.type}]</summary>`;
+            html += `<pre class="text-[11px] bg-gray-50 p-2 mt-1 rounded max-h-40 overflow-auto">${(sec.content || '').substring(0, 500)}</pre></details>`;
+          });
+          html += '</div>';
+        }
+      }
+      content.innerHTML = html || '<p>Khong co du lieu</p>';
+    } catch (err) {
+      content.innerHTML = `<p class="text-red-600">Loi: ${err.message}</p>`;
+    }
+  }
+
+  function closeModal() {
+    document.getElementById('report-modal').classList.add('hidden');
+  }
+</script>
+{% endblock %}
