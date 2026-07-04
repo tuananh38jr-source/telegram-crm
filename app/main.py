@@ -843,13 +843,14 @@ async def set_import_lock(request: Request):
 async def web_login_start(request: Request):
     """
     Start a new web-based Telegram Ads login session.
-    Server opens Playwright headless, captures QR code.
-    User scans QR with phone's Telegram app.
+    Server opens Playwright headless, clicks Log In, enters phone number,
+    clicks Next. User then confirms via Telegram app on their phone.
     """
     from app.services import telegram_login_service as login_svc
 
     body = await request.json()
     account_name = body.get("account_name", "").strip()
+    phone = body.get("phone_number", "").strip()
 
     if not account_name:
         return JSONResponse(content={
@@ -857,10 +858,16 @@ async def web_login_start(request: Request):
             "error": "Vui long chon account truoc khi login",
         })
 
+    if not phone:
+        return JSONResponse(content={
+            "success": False,
+            "error": "Vui long nhap so dien thoai Telegram (VD: +84xxxxxxxxx)",
+        })
+
     # Cleanup expired sessions first
     await login_svc.cleanup_expired_sessions()
 
-    result = await login_svc.start_login_session(account_name)
+    result = await login_svc.start_login_session(account_name, phone)
 
     if result.get("status") == "error":
         return JSONResponse(content={
@@ -873,6 +880,7 @@ async def web_login_start(request: Request):
         "session_id": result["session_id"],
         "status": result["status"],
         "account_name": account_name,
+        "phone": phone,
     })
 
 
@@ -885,20 +893,38 @@ async def web_login_status(session_id: str):
     return JSONResponse(content=result)
 
 
-@app.get("/telegram-ads/web-login/qr/{session_id}")
-async def web_login_qr_image(session_id: str):
-    """Serve the QR code screenshot for the user to scan."""
+@app.get("/telegram-ads/web-login/screenshot/{session_id}")
+async def web_login_screenshot(session_id: str):
+    """Serve the login page screenshot (for debugging/status display)."""
     from app.services import telegram_login_service as login_svc
 
-    qr_path = login_svc.get_qr_path(session_id)
-    if not qr_path:
-        raise HTTPException(status_code=404, detail="QR code chua san sang hoac session het han")
+    ss_path = login_svc.get_screenshot_path(session_id)
+    if not ss_path:
+        raise HTTPException(status_code=404, detail="Screenshot chua san sang")
 
     return FileResponse(
-        qr_path,
+        ss_path,
         media_type="image/png",
         headers={"Cache-Control": "no-cache, no-store"},
     )
+
+
+@app.post("/telegram-ads/web-login/submit-code/{session_id}")
+async def web_login_submit_code(session_id: str, request: Request):
+    """Submit verification code if Telegram requires it."""
+    from app.services import telegram_login_service as login_svc
+
+    body = await request.json()
+    code = body.get("code", "").strip()
+
+    if not code:
+        return JSONResponse(content={
+            "success": False,
+            "error": "Vui long nhap ma xac nhan",
+        })
+
+    result = await login_svc.submit_verification_code(session_id, code)
+    return JSONResponse(content=result)
 
 
 @app.post("/telegram-ads/web-login/cancel/{session_id}")

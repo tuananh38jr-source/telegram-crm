@@ -10,11 +10,11 @@
   <div class="flex items-center justify-between flex-wrap gap-3">
     <div>
       <h2 class="text-white text-lg font-bold">Login Telegram Ads</h2>
-      <p class="text-blue-100 text-sm mt-1">Quet QR code bang app Telegram tren dien thoai — khong can terminal</p>
+      <p class="text-blue-100 text-sm mt-1">Nhap so DT → xac nhan tren app Telegram → luu cookies tu dong</p>
     </div>
     <div class="flex gap-2">
       <button onclick="openWebLoginModal()" class="bg-white text-blue-700 font-bold px-6 py-3 rounded-lg hover:bg-blue-50 transition shadow-md text-sm">
-        LOGIN QR CODE
+        LOGIN TREN CRM
       </button>
       <button onclick="loginTelegramAds()" class="bg-blue-500 text-white font-medium px-4 py-3 rounded-lg hover:bg-blue-400 transition text-xs" title="Mo ads.telegram.org de login thu cong">
         Login thu cong
@@ -34,15 +34,15 @@
     <summary class="text-blue-100 text-xs cursor-pointer hover:text-white">Huong dan chi tiet cac cach login</summary>
     <div class="mt-3 bg-white/10 rounded-lg p-4 text-white text-xs space-y-3">
       <div>
-        <p class="font-semibold mb-2">Cach 1: Login QR Code tren CRM (de nhat — khuyen nghi)</p>
+        <p class="font-semibold mb-2">Cach 1: Login tren CRM (de nhat — khuyen nghi)</p>
         <ol class="list-decimal list-inside space-y-1 text-blue-100">
-          <li>Nhan nut <strong class="text-white">"LOGIN QR CODE"</strong> o tren</li>
-          <li>Chon ten account CRM trong danh sach</li>
-          <li>QR code se hien tren man hinh CRM</li>
-          <li>Mo app <strong class="text-white">Telegram tren dien thoai</strong> → quet QR code</li>
+          <li>Nhan nut <strong class="text-white">"LOGIN TREN CRM"</strong> o tren</li>
+          <li>Chon ten account CRM + nhap so dien thoai Telegram</li>
+          <li>Nhan "Dang nhap" → server tu mo ads.telegram.org va nhap so DT</li>
+          <li>Mo app <strong class="text-white">Telegram tren dien thoai</strong> → bam xac nhan dang nhap</li>
           <li>Doi vai giay → he thong tu luu cookies va bao thanh cong</li>
         </ol>
-        <p class="mt-1 text-blue-200 text-[11px]">Server tu dong mo trinh duyet, chup QR code, luu tat ca cookies (ke ca httpOnly).</p>
+        <p class="mt-1 text-blue-200 text-[11px]">Server tu dong mo trinh duyet, nhap so DT, luu tat ca cookies (ke ca httpOnly).</p>
       </div>
       <div>
         <p class="font-semibold mb-2">Cach 2: Login thu cong + Bookmarklet (backup)</p>
@@ -255,7 +255,7 @@
 </div>
 
 <!-- ======================================== -->
-<!-- TELEGRAM WEB LOGIN MODAL (QR Code) -->
+<!-- TELEGRAM WEB LOGIN MODAL (Phone-based) -->
 <!-- ======================================== -->
 <div id="web-login-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
@@ -268,54 +268,77 @@
     <!-- Body -->
     <div class="p-6">
 
-      <!-- Step 1: Select account -->
-      <div id="wl-step-select" class="">
-        <p class="text-sm text-gray-600 mb-1">Chon account CRM muon login Telegram Ads.</p>
-        <p class="text-xs text-gray-400 mb-4">Server se mo trinh duyet va chup QR code de ban quet.</p>
+      <!-- Step 1: Select account + Enter phone -->
+      <div id="wl-step-select">
+        <p class="text-sm text-gray-600 mb-1">Chon account CRM va nhap so dien thoai Telegram.</p>
+        <p class="text-xs text-gray-400 mb-4">Server se tu dong dang nhap. Ban chi can xac nhan tren app Telegram.</p>
+
+        <label class="block text-xs font-medium text-gray-600 mb-1">Account CRM</label>
         <select id="wl-account-select" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 mb-4">
           <option value="">-- Chon account --</option>
           {% for account in accounts %}
           <option value="{{ account.name }}">{{ account.name }}{% if account.login_status and account.login_status != 'none' %} ({{ account.login_status }}){% endif %}</option>
           {% endfor %}
         </select>
+
+        <label class="block text-xs font-medium text-gray-600 mb-1">So dien thoai Telegram (quoc te)</label>
+        <input type="tel" id="wl-phone-input" placeholder="VD: +84896399862" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 mb-4">
+        <p class="text-[11px] text-gray-400 mb-4">Nhap dung so DT dang ky Telegram Ads. Telegram se gui tin nhan xac nhan den app Telegram cua ban.</p>
+
         <button onclick="startWebLogin()" id="wl-start-btn" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition">
-          Bat dau Login
+          Dang nhap
         </button>
       </div>
 
-      <!-- Step 2: QR Code display -->
-      <div id="wl-step-qr" class="hidden text-center">
+      <!-- Step 2: Waiting for Telegram confirmation -->
+      <div id="wl-step-waiting" class="hidden text-center">
         <!-- Loading state -->
         <div id="wl-loading" class="py-8">
           <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-3"></div>
-          <p class="text-sm text-gray-600">Dang mo ads.telegram.org...</p>
+          <p class="text-sm text-gray-600">Dang mo ads.telegram.org va nhap so dien thoai...</p>
           <p class="text-xs text-gray-400 mt-1">Vui long doi 5-10 giay</p>
         </div>
-        <!-- QR Code -->
-        <div id="wl-qr-container" class="hidden">
-          <p class="text-sm text-gray-600 mb-3">Mo app <strong>Telegram tren dien thoai</strong> va quet ma nay:</p>
-          <div class="flex justify-center mb-4">
-            <div class="border-2 border-gray-200 rounded-xl p-3 bg-white inline-block">
-              <img id="wl-qr-image" src="" alt="QR Code" class="w-64 h-64 object-contain">
-            </div>
+
+        <!-- Phone submitted - waiting for Telegram app confirmation -->
+        <div id="wl-confirm-waiting" class="hidden py-4">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div class="text-3xl mb-2">&#128241;</div>
+            <p class="text-blue-800 font-bold text-sm mb-1">Kiem tra app Telegram tren dien thoai!</p>
+            <p class="text-blue-600 text-xs">Telegram da gui tin nhan xac nhan. Mo app Telegram tren dien thoai va bam xac nhan dang nhap.</p>
           </div>
-          <div id="wl-waiting" class="flex items-center justify-center gap-2 text-blue-600 text-sm">
+          <div class="flex items-center justify-center gap-2 text-blue-600 text-sm">
             <div class="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
-            <span>Dang doi ban quet QR code...</span>
+            <span>Dang doi xac nhan tu Telegram...</span>
           </div>
-          <!-- Success state -->
-          <div id="wl-success" class="hidden mt-4">
-            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p class="text-green-800 font-bold text-lg mb-1">Dang nhap thanh cong!</p>
-              <p id="wl-success-details" class="text-green-600 text-sm"></p>
-            </div>
+          <p class="text-[11px] text-gray-400 mt-3">Neu khong thay tin nhan, kiem tra: Telegram &gt; Settings &gt; Devices</p>
+        </div>
+
+        <!-- Code input (if Telegram requires it) -->
+        <div id="wl-code-input" class="hidden py-4">
+          <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+            <p class="text-amber-800 font-bold text-sm mb-1">Nhap ma xac nhan</p>
+            <p class="text-amber-600 text-xs mb-3">Telegram yeu cau nhap ma. Kiem tra tin nhan Telegram va nhap ma o duoi:</p>
+            <input type="text" id="wl-code-field" placeholder="Nhap ma xac nhan" class="w-full border border-amber-300 rounded-lg px-3 py-2.5 text-center text-lg tracking-widest focus:outline-none focus:border-amber-500 mb-3" maxlength="10">
+            <button onclick="submitVerificationCode()" class="w-full bg-amber-500 text-white font-bold py-2.5 rounded-lg hover:bg-amber-600 transition">
+              Xac nhan
+            </button>
           </div>
-          <!-- Error state -->
-          <div id="wl-error" class="hidden mt-4">
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p class="text-red-800 font-bold mb-1">Loi</p>
-              <p id="wl-error-details" class="text-red-600 text-sm"></p>
-            </div>
+        </div>
+
+        <!-- Success state -->
+        <div id="wl-success" class="hidden py-4">
+          <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div class="text-3xl mb-2">&#10004;</div>
+            <p class="text-green-800 font-bold text-lg mb-1">Dang nhap thanh cong!</p>
+            <p id="wl-success-details" class="text-green-600 text-sm"></p>
+          </div>
+        </div>
+
+        <!-- Error state -->
+        <div id="wl-error" class="hidden py-4">
+          <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p class="text-red-800 font-bold mb-1">Loi</p>
+            <p id="wl-error-details" class="text-red-600 text-sm"></p>
           </div>
         </div>
       </div>
@@ -570,7 +593,7 @@
   setInterval(checkImportLock, 10000);
 
   // ============================================================
-  // WEB LOGIN QR CODE FLOW
+  // WEB LOGIN PHONE-BASED FLOW
   // ============================================================
   let webLoginSessionId = null;
   let webLoginPollTimer = null;
@@ -578,15 +601,15 @@
   function openWebLoginModal() {
     // Reset all states
     document.getElementById('wl-step-select').classList.remove('hidden');
-    document.getElementById('wl-step-qr').classList.add('hidden');
-    document.getElementById('wl-loading').classList.remove('hidden');
-    document.getElementById('wl-qr-container').classList.add('hidden');
+    document.getElementById('wl-step-waiting').classList.add('hidden');
+    document.getElementById('wl-loading').classList.add('hidden');
+    document.getElementById('wl-confirm-waiting').classList.add('hidden');
+    document.getElementById('wl-code-input').classList.add('hidden');
     document.getElementById('wl-success').classList.add('hidden');
     document.getElementById('wl-error').classList.add('hidden');
-    document.getElementById('wl-waiting').classList.remove('hidden');
     document.getElementById('wl-retry-btn').classList.add('hidden');
     document.getElementById('wl-start-btn').disabled = false;
-    document.getElementById('wl-start-btn').textContent = 'Bat dau Login';
+    document.getElementById('wl-start-btn').textContent = 'Dang nhap';
     webLoginSessionId = null;
     if (webLoginPollTimer) { clearInterval(webLoginPollTimer); webLoginPollTimer = null; }
 
@@ -604,60 +627,63 @@
 
   async function startWebLogin() {
     const accountName = document.getElementById('wl-account-select').value;
+    const phone = document.getElementById('wl-phone-input').value.trim();
+
     if (!accountName) {
       alert('Vui long chon mot account truoc khi login');
       return;
     }
+    if (!phone) {
+      alert('Vui long nhap so dien thoai Telegram (VD: +84896399862)');
+      return;
+    }
 
-    // Show loading
+    // Disable button, show loading
+    document.getElementById('wl-start-btn').disabled = true;
+    document.getElementById('wl-start-btn').textContent = 'Dang xu ly...';
     document.getElementById('wl-step-select').classList.add('hidden');
-    document.getElementById('wl-step-qr').classList.remove('hidden');
+    document.getElementById('wl-step-waiting').classList.remove('hidden');
     document.getElementById('wl-loading').classList.remove('hidden');
-    document.getElementById('wl-qr-container').classList.add('hidden');
+    document.getElementById('wl-confirm-waiting').classList.add('hidden');
 
     try {
       const resp = await fetch('/telegram-ads/web-login/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_name: accountName })
+        body: JSON.stringify({ account_name: accountName, phone_number: phone })
       });
       const data = await resp.json();
 
       if (data.success) {
         webLoginSessionId = data.session_id;
-        // Show QR code
+
         document.getElementById('wl-loading').classList.add('hidden');
-        document.getElementById('wl-qr-container').classList.remove('hidden');
-        // Load QR image
-        refreshQrImage();
-        // Start polling for authentication
-        webLoginPollTimer = setInterval(apiLoginCheck, 3000);
+
+        if (data.status === 'authenticated') {
+          // Already logged in (cookies existed)
+          showLoginSuccess(data.cookies_count || 0, data.orgs_count || 0);
+        } else if (data.status === 'phone_submitted' || data.status === 'phone_entered') {
+          // Show "check your Telegram app" message
+          document.getElementById('wl-confirm-waiting').classList.remove('hidden');
+          // Start polling for authentication
+          webLoginPollTimer = setInterval(apiLoginCheck, 3000);
+        } else {
+          // login_form_ready or other — show waiting + start polling
+          document.getElementById('wl-confirm-waiting').classList.remove('hidden');
+          webLoginPollTimer = setInterval(apiLoginCheck, 3000);
+        }
       } else {
         document.getElementById('wl-loading').classList.add('hidden');
-        document.getElementById('wl-qr-container').classList.remove('hidden');
-        document.getElementById('wl-waiting').classList.add('hidden');
         document.getElementById('wl-error').classList.remove('hidden');
         document.getElementById('wl-error-details').textContent = data.error || 'Khong the bat dau login';
         document.getElementById('wl-retry-btn').classList.remove('hidden');
       }
     } catch (err) {
       document.getElementById('wl-loading').classList.add('hidden');
-      document.getElementById('wl-qr-container').classList.remove('hidden');
-      document.getElementById('wl-waiting').classList.add('hidden');
       document.getElementById('wl-error').classList.remove('hidden');
       document.getElementById('wl-error-details').textContent = 'Loi ket noi: ' + err.message;
       document.getElementById('wl-retry-btn').classList.remove('hidden');
     }
-  }
-
-  function refreshQrImage() {
-    if (!webLoginSessionId) return;
-    const img = document.getElementById('wl-qr-image');
-    img.src = '/telegram-ads/web-login/qr/' + webLoginSessionId + '?t=' + Date.now();
-    img.onerror = function() {
-      // QR not ready yet, retry in 2 seconds
-      setTimeout(refreshQrImage, 2000);
-    };
   }
 
   async function apiLoginCheck() {
@@ -670,49 +696,82 @@
       if (data.status === 'authenticated') {
         clearInterval(webLoginPollTimer);
         webLoginPollTimer = null;
+        showLoginSuccess(data.cookies_count || 0, data.orgs_count || 0);
 
-        document.getElementById('wl-waiting').classList.add('hidden');
-        document.getElementById('wl-success').classList.remove('hidden');
-        document.getElementById('wl-success-details').textContent =
-          (data.cookies_count || 0) + ' cookies, ' +
-          (data.orgs_count || 0) + ' organizations';
-
-        // Reload page after 2.5s
-        setTimeout(() => location.reload(), 2500);
+      } else if (data.status === 'needs_code') {
+        // Telegram requires a verification code
+        document.getElementById('wl-confirm-waiting').classList.add('hidden');
+        document.getElementById('wl-code-input').classList.remove('hidden');
 
       } else if (data.status === 'error') {
         clearInterval(webLoginPollTimer);
         webLoginPollTimer = null;
-
-        document.getElementById('wl-waiting').classList.add('hidden');
+        document.getElementById('wl-confirm-waiting').classList.add('hidden');
+        document.getElementById('wl-code-input').classList.add('hidden');
         document.getElementById('wl-error').classList.remove('hidden');
         document.getElementById('wl-error-details').textContent = data.error || 'Loi khong xac dinh';
         document.getElementById('wl-retry-btn').classList.remove('hidden');
-
-      } else if (data.status === 'page_loaded' || data.status === 'qr_ready') {
-        // QR code is ready, ensure image is loaded
-        const img = document.getElementById('wl-qr-image');
-        if (!img.src || img.src.indexOf(webLoginSessionId) === -1) {
-          refreshQrImage();
-        }
       }
-      // status === 'waiting' or 'starting' — keep polling
+      // 'waiting', 'starting', 'phone_submitted' — keep polling
     } catch (err) {
       // Network error during poll, keep trying
     }
   }
 
+  async function submitVerificationCode() {
+    if (!webLoginSessionId) return;
+    const code = document.getElementById('wl-code-field').value.trim();
+    if (!code) {
+      alert('Vui long nhap ma xac nhan tu Telegram');
+      return;
+    }
+
+    try {
+      const resp = await fetch('/telegram-ads/web-login/submit-code/' + webLoginSessionId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code })
+      });
+      const data = await resp.json();
+
+      if (data.status === 'code_submitted') {
+        document.getElementById('wl-code-input').classList.add('hidden');
+        document.getElementById('wl-confirm-waiting').classList.remove('hidden');
+        // Continue polling
+        if (!webLoginPollTimer) {
+          webLoginPollTimer = setInterval(apiLoginCheck, 3000);
+        }
+      } else {
+        document.getElementById('wl-error').classList.remove('hidden');
+        document.getElementById('wl-error-details').textContent = data.error || 'Ma xac nhan khong hop le';
+      }
+    } catch (err) {
+      document.getElementById('wl-error').classList.remove('hidden');
+      document.getElementById('wl-error-details').textContent = 'Loi ket noi: ' + err.message;
+    }
+  }
+
+  function showLoginSuccess(cookiesCount, orgsCount) {
+    document.getElementById('wl-confirm-waiting').classList.add('hidden');
+    document.getElementById('wl-code-input').classList.add('hidden');
+    document.getElementById('wl-success').classList.remove('hidden');
+    document.getElementById('wl-success-details').textContent =
+      cookiesCount + ' cookies, ' + orgsCount + ' organizations';
+    setTimeout(() => location.reload(), 2500);
+  }
+
   function retryWebLogin() {
-    // Cancel current session and go back to step 1
     if (webLoginSessionId) {
       fetch('/telegram-ads/web-login/cancel/' + webLoginSessionId, { method: 'POST' }).catch(() => {});
       webLoginSessionId = null;
     }
     if (webLoginPollTimer) { clearInterval(webLoginPollTimer); webLoginPollTimer = null; }
 
-    document.getElementById('wl-step-qr').classList.add('hidden');
+    document.getElementById('wl-step-waiting').classList.add('hidden');
     document.getElementById('wl-step-select').classList.remove('hidden');
     document.getElementById('wl-retry-btn').classList.add('hidden');
+    document.getElementById('wl-start-btn').disabled = false;
+    document.getElementById('wl-start-btn').textContent = 'Dang nhap';
   }
 </script>
 {% endblock %}
