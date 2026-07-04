@@ -498,10 +498,117 @@ async def upload_ads_dual_files(
 @app.post("/telegram-ads/scan")
 async def manual_scan_ads_csv(db: Session = Depends(get_db)):
     from app.services.folder_watcher import FolderWatcher
-    
+
     base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_accounts')
     watcher = FolderWatcher(base_dir)
     result = watcher.scan_and_import(db)
-    
+
     return JSONResponse(content=result)
+
+
+@app.post("/telegram-ads/auto-export/{account_name}")
+async def auto_export_ads(account_name: str, db: Session = Depends(get_db)):
+    """
+    Trigger auto-export script cho 1 account.
+    Chay Playwright de tu dong export CSV tu ads.telegram.org.
+    """
+    import subprocess
+
+    script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_auto_export.py')
+
+    if not os.path.exists(script_path):
+        return JSONResponse(content={
+            'success': False,
+            'error': 'Script auto-export chua duoc cai dat',
+        })
+
+    try:
+        result = subprocess.run(
+            ['python', script_path, '--account', account_name],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+        )
+
+        if result.returncode == 0:
+            from app.services.folder_watcher import FolderWatcher
+            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_accounts')
+            watcher = FolderWatcher(base_dir)
+            scan_result = watcher.scan_and_import(db)
+
+            return JSONResponse(content={
+                'success': True,
+                'message': f'Da export va import thanh cong cho {account_name}',
+                'output': result.stdout,
+                'scan': scan_result,
+            })
+        else:
+            return JSONResponse(content={
+                'success': False,
+                'error': result.stderr or result.stdout,
+            })
+
+    except subprocess.TimeoutExpired:
+        return JSONResponse(content={
+            'success': False,
+            'error': 'Script chay qua lau (>120s). Co the cookie het han, can login lai.',
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            'success': False,
+            'error': str(e),
+        })
+
+
+@app.post("/telegram-ads/auto-export-all")
+async def auto_export_all_ads(db: Session = Depends(get_db)):
+    """Trigger auto-export cho TAT CA accounts."""
+    import subprocess
+
+    script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_auto_export.py')
+
+    if not os.path.exists(script_path):
+        return JSONResponse(content={
+            'success': False,
+            'error': 'Script auto-export chua duoc cai dat',
+        })
+
+    try:
+        result = subprocess.run(
+            ['python', script_path, '--all'],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            cwd=os.path.dirname(os.path.dirname(__file__)),
+        )
+
+        if result.returncode == 0:
+            from app.services.folder_watcher import FolderWatcher
+            base_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'telegram_ads_accounts')
+            watcher = FolderWatcher(base_dir)
+            scan_result = watcher.scan_and_import(db)
+
+            return JSONResponse(content={
+                'success': True,
+                'message': 'Da export va import thanh cong cho tat ca accounts',
+                'output': result.stdout,
+                'scan': scan_result,
+            })
+        else:
+            return JSONResponse(content={
+                'success': False,
+                'error': result.stderr or result.stdout,
+            })
+
+    except subprocess.TimeoutExpired:
+        return JSONResponse(content={
+            'success': False,
+            'error': 'Script chay qua lau (>300s).',
+        })
+    except Exception as e:
+        return JSONResponse(content={
+            'success': False,
+            'error': str(e),
+        })
 

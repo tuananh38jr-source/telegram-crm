@@ -61,9 +61,14 @@
     <div class="bg-white rounded-lg shadow overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
         <h3 class="text-sm font-semibold text-gray-700">Danh sách Accounts</h3>
-        <button onclick="scanAll()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700 transition">
-          Scan tất cả folder
-        </button>
+        <div class="flex gap-2">
+          <button onclick="autoExportAll()" class="text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition">
+            ⚡ Export All
+          </button>
+          <button onclick="scanAll()" class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700 transition">
+            Scan folder
+          </button>
+        </div>
       </div>
 
       {% if accounts %}
@@ -87,6 +92,13 @@
                 {% endif %}
               </p>
             </div>
+            <button
+              class="auto-export-btn text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition"
+              data-account="{{ account.name }}"
+              onclick="autoExport(this, '{{ account.name }}')"
+            >
+              ⚡ Auto Export
+            </button>
           </div>
 
           <!-- Dual file upload form (Views + Budget) -->
@@ -229,6 +241,64 @@
       location.reload();
     } catch (err) {
       alert('Lỗi: ' + err.message);
+    }
+  }
+
+  // Auto Export single account
+  async function autoExport(btn, accountName) {
+    if (!confirm(`Auto Export cho "${accountName}"?\n\nBrowser se tu dong mo ads.telegram.org va export CSV.`)) return;
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Đang export...';
+    btn.className = 'auto-export-btn text-xs bg-gray-400 text-white px-3 py-1.5 rounded cursor-wait';
+
+    try {
+      const resp = await fetch(`/telegram-ads/auto-export/${accountName}`, { method: 'POST' });
+      const data = await resp.json();
+
+      if (data.success) {
+        btn.className = 'auto-export-btn text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 transition';
+        btn.textContent = '✓ Export OK';
+        setTimeout(() => {
+          btn.textContent = '⚡ Auto Export';
+          btn.className = 'auto-export-btn text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition';
+          btn.disabled = false;
+        }, 5000);
+        location.reload();
+      } else {
+        btn.className = 'auto-export-btn text-xs bg-red-600 text-white px-3 py-1.5 rounded';
+        btn.textContent = '✗ Lỗi';
+        alert(`Lỗi: ${data.error}`);
+        setTimeout(() => {
+          btn.textContent = '⚡ Auto Export';
+          btn.className = 'auto-export-btn text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition';
+          btn.disabled = false;
+        }, 5000);
+      }
+    } catch (err) {
+      alert('Lỗi kết nối: ' + err.message);
+      btn.textContent = '⚡ Auto Export';
+      btn.className = 'auto-export-btn text-xs bg-purple-600 text-white px-3 py-1.5 rounded hover:bg-purple-700 transition';
+      btn.disabled = false;
+    }
+  }
+
+  // Auto Export all accounts
+  async function autoExportAll() {
+    if (!confirm('Auto Export cho TẤT CẢ accounts?\n\nQua trinh co the mat 2-5 phut.')) return;
+
+    try {
+      const resp = await fetch('/telegram-ads/auto-export-all', { method: 'POST' });
+      const data = await resp.json();
+
+      if (data.success) {
+        alert(`✓ ${data.message}\n\nImported: ${data.scan?.total_imported || 0} rows`);
+        location.reload();
+      } else {
+        alert(`✗ Lỗi: ${data.error}`);
+      }
+    } catch (err) {
+      alert('Lỗi kết nối: ' + err.message);
     }
   }
 </script>
