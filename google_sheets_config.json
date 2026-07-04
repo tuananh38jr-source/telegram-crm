@@ -1,0 +1,43 @@
+{
+    "service_account_key": "service_account.json",
+    "sync_interval_minutes": 60,
+    "sheets": [
+        {
+            "name": "Sales Data (Doanh thu)",
+            "sheet_url": "",
+            "data_type": "sales",
+            "worksheet": "Sheet1",
+            "enabled": true,
+            "column_mapping": {
+                "order_code": "order_code",
+                "employee_name": "employee_name",
+                "product_name": "product_name",
+                "amount": "total_amount",
+                "quantity": "quantity",
+                "date": "order_date",
+                "unit_price": "unit_price",
+                "currency": "currency",
+                "status": "status",
+                "customer_telegram_username": "customer_telegram_username"
+            }
+        },
+        {
+            "name": "Employee Performance",
+            "sheet_url": "",
+            "data_type": "employees",
+            "worksheet": "Sheet1",
+            "enabled": true,
+            "column_mapping": {
+                "employee_name": "full_name",
+                "telegram_username": "telegram_username",
+                "phone": "phone",
+                "role": "role",
+                "commission_rate": "commission_rate",
+                "revenue": "revenue",
+                "orders_count": "orders_count",
+                "leads_count": "leads_count",
+                "conversion_rate": "conversion_rate"
+            }
+        }
+    ]
+}

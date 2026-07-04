@@ -121,7 +121,7 @@ def login_and_save(account_name: str):
 
         # Luu cookies
         cookies = context.cookies()
-        cookie_path.write_text(json.dumps(cookies, indent=2, ensure_ascii=False))
+        cookie_path.write_text(json.dumps(cookies, indent=2, ensure_ascii=False), encoding='utf-8')
         print(f"  [OK] Da luu {len(cookies)} cookies")
 
         # Detect organizations bang cach mo dropdown
@@ -134,7 +134,7 @@ def login_and_save(account_name: str):
                 "organizations": orgs,
                 "detected_at": datetime.now().isoformat(),
             }
-            orgs_path.write_text(json.dumps(orgs_data, indent=2, ensure_ascii=False))
+            orgs_path.write_text(json.dumps(orgs_data, indent=2, ensure_ascii=False), encoding='utf-8')
             print(f"  [OK] Tim thay {len(orgs)} organizations:")
             for i, org in enumerate(orgs, 1):
                 print(f"       {i}. {org}")
@@ -145,7 +145,7 @@ def login_and_save(account_name: str):
                 "organizations": [account_name],
                 "detected_at": datetime.now().isoformat(),
             }
-            orgs_path.write_text(json.dumps(orgs_data, indent=2, ensure_ascii=False))
+            orgs_path.write_text(json.dumps(orgs_data, indent=2, ensure_ascii=False), encoding='utf-8')
 
         # Navigate to stats page to confirm access
         print("  [INFO] Kiem tra truy cap trang Statistics...")
@@ -498,12 +498,12 @@ def export_account(account_name: str, headless: bool = True):
         return
 
     # Load cookies
-    cookies = json.loads(cookie_path.read_text())
+    cookies = json.loads(cookie_path.read_text(encoding='utf-8'))
 
     # Load organizations list
     orgs = [account_name]  # Default: chi co 1 org
     if orgs_path.exists():
-        orgs_data = json.loads(orgs_path.read_text())
+        orgs_data = json.loads(orgs_path.read_text(encoding='utf-8'))
         orgs = orgs_data.get("organizations", [account_name])
 
     print(f"\n{'='*60}")
@@ -580,7 +580,7 @@ def export_account(account_name: str, headless: bool = True):
 
         # Cap nhat cookies
         new_cookies = context.cookies()
-        cookie_path.write_text(json.dumps(new_cookies, indent=2, ensure_ascii=False))
+        cookie_path.write_text(json.dumps(new_cookies, indent=2, ensure_ascii=False), encoding='utf-8')
 
         browser.close()
 
@@ -678,7 +678,7 @@ Vi du:
 
                 org_count = "?"
                 if orgs_file.exists():
-                    orgs_data = json.loads(orgs_file.read_text())
+                    orgs_data = json.loads(orgs_file.read_text(encoding='utf-8'))
                     org_count = len(orgs_data.get("organizations", []))
 
                 print(f"    - {acc} ({org_count} orgs, cookie: {mtime.strftime('%d/%m/%Y %H:%M')})")

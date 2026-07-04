@@ -10,3 +10,4 @@ python-dotenv==1.0.1
 pydantic==2.7.3
 apscheduler==3.10.4
 playwright==1.44.0
+gspread==6.1.2

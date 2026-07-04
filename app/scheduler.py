@@ -100,6 +100,30 @@ async def job_auto_export_telegram_ads():
         logger.error(f"[{datetime.now()}] Loi auto-export: {e}")
 
 
+async def job_sync_google_sheets():
+    """
+    Job: Dong bo du lieu tu Google Sheets (doanh thu, nhan vien).
+    Chay moi 4 tieng.
+    """
+    logger.info(f"[{datetime.now()}] Bat dau sync Google Sheets...")
+    try:
+        from app.services.google_sheets_service import sync_from_sheet
+        db = SessionLocal()
+        try:
+            result = sync_from_sheet(db)
+            logger.info(
+                f"[{datetime.now()}] Google Sheets sync: "
+                f"{result.get('total_imported', 0)} rows, "
+                f"{len(result.get('sheets', []))} sheets"
+            )
+        finally:
+            db.close()
+    except ImportError:
+        logger.warning(f"[{datetime.now()}] gspread chua duoc cai, bo qua Google Sheets sync")
+    except Exception as e:
+        logger.error(f"[{datetime.now()}] Loi sync Google Sheets: {e}")
+
+
 def start_scheduler():
     """
     Khởi động scheduler với tất cả jobs.
@@ -128,6 +152,15 @@ def start_scheduler():
         trigger=IntervalTrigger(hours=12),
         id='auto_export_ads',
         name='Auto Export Telegram Ads (Playwright)',
+        replace_existing=True,
+    )
+
+    # Job 4: Sync Google Sheets mỗi 4 tiếng (doanh thu, nhân viên)
+    scheduler.add_job(
+        job_sync_google_sheets,
+        trigger=IntervalTrigger(hours=4),
+        id='sync_google_sheets',
+        name='Sync Google Sheets (Sales + Employees)',
         replace_existing=True,
     )
     
