@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request, Form, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -833,6 +833,81 @@ async def set_import_lock(request: Request):
         return JSONResponse(content={"success": True, "message": "Đã mở khóa import"})
 
     return JSONResponse(content={"success": False, "error": "Action không hợp lệ"})
+
+
+# ============================================================
+# Telegram Ads Web Login (QR Code - Playwright Headless)
+# ============================================================
+
+@app.post("/telegram-ads/web-login/start")
+async def web_login_start(request: Request):
+    """
+    Start a new web-based Telegram Ads login session.
+    Server opens Playwright headless, captures QR code.
+    User scans QR with phone's Telegram app.
+    """
+    from app.services import telegram_login_service as login_svc
+
+    body = await request.json()
+    account_name = body.get("account_name", "").strip()
+
+    if not account_name:
+        return JSONResponse(content={
+            "success": False,
+            "error": "Vui long chon account truoc khi login",
+        })
+
+    # Cleanup expired sessions first
+    await login_svc.cleanup_expired_sessions()
+
+    result = await login_svc.start_login_session(account_name)
+
+    if result.get("status") == "error":
+        return JSONResponse(content={
+            "success": False,
+            "error": result.get("error", "Khong the mo ads.telegram.org"),
+        })
+
+    return JSONResponse(content={
+        "success": True,
+        "session_id": result["session_id"],
+        "status": result["status"],
+        "account_name": account_name,
+    })
+
+
+@app.get("/telegram-ads/web-login/status/{session_id}")
+async def web_login_status(session_id: str):
+    """Check if user has completed Telegram authentication."""
+    from app.services import telegram_login_service as login_svc
+
+    result = await login_svc.check_auth_status(session_id)
+    return JSONResponse(content=result)
+
+
+@app.get("/telegram-ads/web-login/qr/{session_id}")
+async def web_login_qr_image(session_id: str):
+    """Serve the QR code screenshot for the user to scan."""
+    from app.services import telegram_login_service as login_svc
+
+    qr_path = login_svc.get_qr_path(session_id)
+    if not qr_path:
+        raise HTTPException(status_code=404, detail="QR code chua san sang hoac session het han")
+
+    return FileResponse(
+        qr_path,
+        media_type="image/png",
+        headers={"Cache-Control": "no-cache, no-store"},
+    )
+
+
+@app.post("/telegram-ads/web-login/cancel/{session_id}")
+async def web_login_cancel(session_id: str):
+    """Cancel an active login session and free browser resources."""
+    from app.services import telegram_login_service as login_svc
+
+    result = await login_svc.cancel_session(session_id)
+    return JSONResponse(content=result)
 
 
 # ============================================================

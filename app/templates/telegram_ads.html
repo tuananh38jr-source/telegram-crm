@@ -7,14 +7,19 @@
 
 <!-- LOGIN TELEGRAM ADS Section -->
 <div class="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-lg p-6 mb-6">
-  <div class="flex items-center justify-between">
+  <div class="flex items-center justify-between flex-wrap gap-3">
     <div>
       <h2 class="text-white text-lg font-bold">Login Telegram Ads</h2>
-      <p class="text-blue-100 text-sm mt-1">Đăng nhập để tự động export CSV từ ads.telegram.org</p>
+      <p class="text-blue-100 text-sm mt-1">Quet QR code bang app Telegram tren dien thoai — khong can terminal</p>
     </div>
-    <button onclick="loginTelegramAds()" class="bg-white text-blue-700 font-bold px-6 py-3 rounded-lg hover:bg-blue-50 transition shadow-md text-sm">
-      LOGIN TELEGRAM ADS
-    </button>
+    <div class="flex gap-2">
+      <button onclick="openWebLoginModal()" class="bg-white text-blue-700 font-bold px-6 py-3 rounded-lg hover:bg-blue-50 transition shadow-md text-sm">
+        LOGIN QR CODE
+      </button>
+      <button onclick="loginTelegramAds()" class="bg-blue-500 text-white font-medium px-4 py-3 rounded-lg hover:bg-blue-400 transition text-xs" title="Mo ads.telegram.org de login thu cong">
+        Login thu cong
+      </button>
+    </div>
   </div>
 
   <!-- Import lock status -->
@@ -26,15 +31,26 @@
 
   <!-- Login flow steps (collapsible) -->
   <details class="mt-4">
-    <summary class="text-blue-100 text-xs cursor-pointer hover:text-white">Hướng dẫn chi tiết cách login</summary>
+    <summary class="text-blue-100 text-xs cursor-pointer hover:text-white">Huong dan chi tiet cac cach login</summary>
     <div class="mt-3 bg-white/10 rounded-lg p-4 text-white text-xs space-y-3">
       <div>
-        <p class="font-semibold mb-2">Cách 1: Login trực tiếp trên web (nhanh nhất)</p>
+        <p class="font-semibold mb-2">Cach 1: Login QR Code tren CRM (de nhat — khuyen nghi)</p>
         <ol class="list-decimal list-inside space-y-1 text-blue-100">
-          <li>Nhấn nút <strong class="text-white">"LOGIN TELEGRAM ADS"</strong> ở trên → tab mới mở ads.telegram.org</li>
-          <li>Đăng nhập bằng số điện thoại Telegram → nhập mã xác nhận</li>
-          <li>Sau khi vào được dashboard (thấy bảng quảng cáo), mở Console: nhấn <kbd class="bg-blue-800 px-1 rounded">F12</kbd> → tab <strong>Console</strong></li>
-          <li>Dán dòng code bên dưới và nhấn Enter:</li>
+          <li>Nhan nut <strong class="text-white">"LOGIN QR CODE"</strong> o tren</li>
+          <li>Chon ten account CRM trong danh sach</li>
+          <li>QR code se hien tren man hinh CRM</li>
+          <li>Mo app <strong class="text-white">Telegram tren dien thoai</strong> → quet QR code</li>
+          <li>Doi vai giay → he thong tu luu cookies va bao thanh cong</li>
+        </ol>
+        <p class="mt-1 text-blue-200 text-[11px]">Server tu dong mo trinh duyet, chup QR code, luu tat ca cookies (ke ca httpOnly).</p>
+      </div>
+      <div>
+        <p class="font-semibold mb-2">Cach 2: Login thu cong + Bookmarklet (backup)</p>
+        <ol class="list-decimal list-inside space-y-1 text-blue-100">
+          <li>Nhan <strong class="text-white">"Login thu cong"</strong> → tab moi mo ads.telegram.org</li>
+          <li>Dang nhap bang so dien thoai Telegram → nhap ma xac nhan</li>
+          <li>Sau khi vao duoc dashboard, mo Console: nhan <kbd class="bg-blue-800 px-1 rounded">F12</kbd> → tab <strong>Console</strong></li>
+          <li>Dan dong code ben duoi va nhan Enter:</li>
         </ol>
         <div class="mt-2 bg-gray-900 rounded p-3 font-mono text-green-400 text-[11px] overflow-x-auto break-all whitespace-pre-wrap">
           <code id="bookmarklet-code">var CRM='{{ request.base_url }}';var a=prompt('Nhap ten account CRM (VD: ERIC james):','');if(!a){alert('Huy bo');}else{fetch(CRM+'telegram-ads/save-cookie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_name:a,cookies:document.cookie,url:location.href})}).then(function(r){return r.json();}).then(function(d){if(d.success){alert('Thanh cong! Cookies da luu. Quay lai CRM de Auto Export.');}else{alert('Loi: '+(d.error||'Unknown'));}}).catch(function(e){alert('Loi ket noi den CRM: '+e.message+'\n\nKiem tra:\n1. CRM server co dang chay khong?\n2. URL CRM co dung khong?');});}</code>
@@ -45,7 +61,7 @@
         <p class="mt-2 text-blue-200 text-[11px]">CRM URL hiện tại: <code class="bg-blue-800 px-1 rounded">{{ request.base_url }}</code></p>
       </div>
       <div>
-        <p class="font-semibold mb-2">Cách 2: Upload cookie file (nếu đã chạy script local)</p>
+        <p class="font-semibold mb-2">Cach 3: Upload cookie file (neu da chay script local)</p>
         <ol class="list-decimal list-inside space-y-1 text-blue-100">
           <li>Chạy trên máy: <code class="bg-blue-800 px-1 rounded">python telegram_ads_auto_export.py --login --account "Tên"</code></li>
           <li>Upload file .json cookie ở form bên dưới</li>
@@ -237,6 +253,87 @@
     </div>
   </div>
 </div>
+
+<!-- ======================================== -->
+<!-- TELEGRAM WEB LOGIN MODAL (QR Code) -->
+<!-- ======================================== -->
+<div id="web-login-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-2xl max-w-md w-full">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+      <h3 class="font-bold text-gray-800">Login Telegram Ads</h3>
+      <button onclick="closeWebLoginModal()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+    </div>
+
+    <!-- Body -->
+    <div class="p-6">
+
+      <!-- Step 1: Select account -->
+      <div id="wl-step-select" class="">
+        <p class="text-sm text-gray-600 mb-1">Chon account CRM muon login Telegram Ads.</p>
+        <p class="text-xs text-gray-400 mb-4">Server se mo trinh duyet va chup QR code de ban quet.</p>
+        <select id="wl-account-select" class="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 mb-4">
+          <option value="">-- Chon account --</option>
+          {% for account in accounts %}
+          <option value="{{ account.name }}">{{ account.name }}{% if account.login_status and account.login_status != 'none' %} ({{ account.login_status }}){% endif %}</option>
+          {% endfor %}
+        </select>
+        <button onclick="startWebLogin()" id="wl-start-btn" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition">
+          Bat dau Login
+        </button>
+      </div>
+
+      <!-- Step 2: QR Code display -->
+      <div id="wl-step-qr" class="hidden text-center">
+        <!-- Loading state -->
+        <div id="wl-loading" class="py-8">
+          <div class="inline-block animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mb-3"></div>
+          <p class="text-sm text-gray-600">Dang mo ads.telegram.org...</p>
+          <p class="text-xs text-gray-400 mt-1">Vui long doi 5-10 giay</p>
+        </div>
+        <!-- QR Code -->
+        <div id="wl-qr-container" class="hidden">
+          <p class="text-sm text-gray-600 mb-3">Mo app <strong>Telegram tren dien thoai</strong> va quet ma nay:</p>
+          <div class="flex justify-center mb-4">
+            <div class="border-2 border-gray-200 rounded-xl p-3 bg-white inline-block">
+              <img id="wl-qr-image" src="" alt="QR Code" class="w-64 h-64 object-contain">
+            </div>
+          </div>
+          <div id="wl-waiting" class="flex items-center justify-center gap-2 text-blue-600 text-sm">
+            <div class="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+            <span>Dang doi ban quet QR code...</span>
+          </div>
+          <!-- Success state -->
+          <div id="wl-success" class="hidden mt-4">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p class="text-green-800 font-bold text-lg mb-1">Dang nhap thanh cong!</p>
+              <p id="wl-success-details" class="text-green-600 text-sm"></p>
+            </div>
+          </div>
+          <!-- Error state -->
+          <div id="wl-error" class="hidden mt-4">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p class="text-red-800 font-bold mb-1">Loi</p>
+              <p id="wl-error-details" class="text-red-600 text-sm"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="px-6 py-3 bg-gray-50 rounded-b-xl flex justify-between items-center">
+      <button onclick="closeWebLoginModal()" class="text-sm text-gray-500 hover:text-gray-700">
+        Dong
+      </button>
+      <button id="wl-retry-btn" onclick="retryWebLogin()" class="hidden text-sm text-blue-600 hover:text-blue-800 font-medium">
+        Thu lai
+      </button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -471,5 +568,151 @@
   }
   checkImportLock();
   setInterval(checkImportLock, 10000);
+
+  // ============================================================
+  // WEB LOGIN QR CODE FLOW
+  // ============================================================
+  let webLoginSessionId = null;
+  let webLoginPollTimer = null;
+
+  function openWebLoginModal() {
+    // Reset all states
+    document.getElementById('wl-step-select').classList.remove('hidden');
+    document.getElementById('wl-step-qr').classList.add('hidden');
+    document.getElementById('wl-loading').classList.remove('hidden');
+    document.getElementById('wl-qr-container').classList.add('hidden');
+    document.getElementById('wl-success').classList.add('hidden');
+    document.getElementById('wl-error').classList.add('hidden');
+    document.getElementById('wl-waiting').classList.remove('hidden');
+    document.getElementById('wl-retry-btn').classList.add('hidden');
+    document.getElementById('wl-start-btn').disabled = false;
+    document.getElementById('wl-start-btn').textContent = 'Bat dau Login';
+    webLoginSessionId = null;
+    if (webLoginPollTimer) { clearInterval(webLoginPollTimer); webLoginPollTimer = null; }
+
+    document.getElementById('web-login-modal').classList.remove('hidden');
+  }
+
+  function closeWebLoginModal() {
+    document.getElementById('web-login-modal').classList.add('hidden');
+    if (webLoginPollTimer) { clearInterval(webLoginPollTimer); webLoginPollTimer = null; }
+    if (webLoginSessionId) {
+      fetch('/telegram-ads/web-login/cancel/' + webLoginSessionId, { method: 'POST' }).catch(() => {});
+      webLoginSessionId = null;
+    }
+  }
+
+  async function startWebLogin() {
+    const accountName = document.getElementById('wl-account-select').value;
+    if (!accountName) {
+      alert('Vui long chon mot account truoc khi login');
+      return;
+    }
+
+    // Show loading
+    document.getElementById('wl-step-select').classList.add('hidden');
+    document.getElementById('wl-step-qr').classList.remove('hidden');
+    document.getElementById('wl-loading').classList.remove('hidden');
+    document.getElementById('wl-qr-container').classList.add('hidden');
+
+    try {
+      const resp = await fetch('/telegram-ads/web-login/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_name: accountName })
+      });
+      const data = await resp.json();
+
+      if (data.success) {
+        webLoginSessionId = data.session_id;
+        // Show QR code
+        document.getElementById('wl-loading').classList.add('hidden');
+        document.getElementById('wl-qr-container').classList.remove('hidden');
+        // Load QR image
+        refreshQrImage();
+        // Start polling for authentication
+        webLoginPollTimer = setInterval(apiLoginCheck, 3000);
+      } else {
+        document.getElementById('wl-loading').classList.add('hidden');
+        document.getElementById('wl-qr-container').classList.remove('hidden');
+        document.getElementById('wl-waiting').classList.add('hidden');
+        document.getElementById('wl-error').classList.remove('hidden');
+        document.getElementById('wl-error-details').textContent = data.error || 'Khong the bat dau login';
+        document.getElementById('wl-retry-btn').classList.remove('hidden');
+      }
+    } catch (err) {
+      document.getElementById('wl-loading').classList.add('hidden');
+      document.getElementById('wl-qr-container').classList.remove('hidden');
+      document.getElementById('wl-waiting').classList.add('hidden');
+      document.getElementById('wl-error').classList.remove('hidden');
+      document.getElementById('wl-error-details').textContent = 'Loi ket noi: ' + err.message;
+      document.getElementById('wl-retry-btn').classList.remove('hidden');
+    }
+  }
+
+  function refreshQrImage() {
+    if (!webLoginSessionId) return;
+    const img = document.getElementById('wl-qr-image');
+    img.src = '/telegram-ads/web-login/qr/' + webLoginSessionId + '?t=' + Date.now();
+    img.onerror = function() {
+      // QR not ready yet, retry in 2 seconds
+      setTimeout(refreshQrImage, 2000);
+    };
+  }
+
+  async function apiLoginCheck() {
+    if (!webLoginSessionId) return;
+
+    try {
+      const resp = await fetch('/telegram-ads/web-login/status/' + webLoginSessionId);
+      const data = await resp.json();
+
+      if (data.status === 'authenticated') {
+        clearInterval(webLoginPollTimer);
+        webLoginPollTimer = null;
+
+        document.getElementById('wl-waiting').classList.add('hidden');
+        document.getElementById('wl-success').classList.remove('hidden');
+        document.getElementById('wl-success-details').textContent =
+          (data.cookies_count || 0) + ' cookies, ' +
+          (data.orgs_count || 0) + ' organizations';
+
+        // Reload page after 2.5s
+        setTimeout(() => location.reload(), 2500);
+
+      } else if (data.status === 'error') {
+        clearInterval(webLoginPollTimer);
+        webLoginPollTimer = null;
+
+        document.getElementById('wl-waiting').classList.add('hidden');
+        document.getElementById('wl-error').classList.remove('hidden');
+        document.getElementById('wl-error-details').textContent = data.error || 'Loi khong xac dinh';
+        document.getElementById('wl-retry-btn').classList.remove('hidden');
+
+      } else if (data.status === 'page_loaded' || data.status === 'qr_ready') {
+        // QR code is ready, ensure image is loaded
+        const img = document.getElementById('wl-qr-image');
+        if (!img.src || img.src.indexOf(webLoginSessionId) === -1) {
+          refreshQrImage();
+        }
+      }
+      // status === 'waiting' or 'starting' — keep polling
+    } catch (err) {
+      // Network error during poll, keep trying
+    }
+  }
+
+  function retryWebLogin() {
+    // Cancel current session and go back to step 1
+    if (webLoginSessionId) {
+      fetch('/telegram-ads/web-login/cancel/' + webLoginSessionId, { method: 'POST' }).catch(() => {});
+      webLoginSessionId = null;
+    }
+    if (webLoginPollTimer) { clearInterval(webLoginPollTimer); webLoginPollTimer = null; }
+
+    document.getElementById('wl-step-qr').classList.add('hidden');
+    document.getElementById('wl-step-select').classList.remove('hidden');
+    document.getElementById('wl-retry-btn').classList.add('hidden');
+  }
 </script>
 {% endblock %}
