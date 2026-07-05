@@ -185,28 +185,44 @@ async def _check_already_logged_in(page, context) -> bool:
     """Check if the browser is already logged in (dashboard visible)."""
     try:
         current_url = page.url
+
+        # Most reliable: URL shows dashboard
         if '/account' in current_url and 'ads.telegram.org' in current_url:
             return True
 
-        # Check for dashboard indicators
-        indicators = [
+        # Dashboard-specific TEXT indicators (NOT generic CSS selectors)
+        # These texts ONLY appear on the dashboard, never on the landing page
+        dashboard_texts = [
             'text=Create a new ad',
             'text=Manage budget',
-            '[class*="campaign"]',
-            '[class*="dashboard"]',
-            'a[href*="/account/"]',
+            'text=Total spend',
         ]
-        for selector in indicators:
+        match_count = 0
+        for selector in dashboard_texts:
             try:
                 el = page.locator(selector).first
                 if await el.is_visible(timeout=1000):
-                    return True
+                    match_count += 1
             except Exception:
                 continue
 
-        # Check cookies
-        cookies = await context.cookies()
-        if any(c['name'] in ('stel_ssid', 'stel_tsession', 'stel_token') for c in cookies):
+        # Require at least 2 matches to avoid false positives
+        if match_count >= 2:
+            return True
+
+        # NOTE: Do NOT check for stel_ssid cookie — it exists on the landing
+        # page for ALL visitors (confirmed via Railway deploy logs).
+        # Only stel_tsession or stel_token indicate real authentication.
+        cookies = []
+        try:
+            cookies = await context.cookies()
+        except Exception:
+            pass
+        has_auth_cookie = any(
+            c['name'] in ('stel_tsession', 'stel_token', 'stel_web_session')
+            for c in cookies
+        )
+        if has_auth_cookie:
             return True
 
     except Exception:
@@ -458,7 +474,7 @@ async def check_auth_status(session_id: str) -> dict:
             pass
         has_session_cookie = any(
             c['name'] in (
-                'stel_ssid', 'stel_tsession', 'stel_token',
+                'stel_tsession', 'stel_token',
                 'sessionid', 'stel_web_session',
             )
             for c in cookies
