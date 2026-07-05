@@ -119,9 +119,19 @@ def login_and_save(account_name: str):
         # Cho user login
         input("\n  >>> Nhan ENTER sau khi da login thanh cong <<<\n")
 
-        # Luu cookies
+        # Luu cookies + storage_state (wrapped format)
         cookies = context.cookies()
-        cookie_path.write_text(json.dumps(cookies, indent=2, ensure_ascii=False), encoding='utf-8')
+        try:
+            ss = context.storage_state()
+        except Exception:
+            ss = None
+        save_obj = {
+            'cookies': cookies,
+            'storage_state': ss,
+            'captured_at': datetime.now().isoformat(),
+            'source': 'cli_login',
+        }
+        cookie_path.write_text(json.dumps(save_obj, indent=2, ensure_ascii=False), encoding='utf-8')
         print(f"  [OK] Da luu {len(cookies)} cookies")
 
         # Detect organizations bang cach mo dropdown
@@ -497,8 +507,28 @@ def export_account(account_name: str, headless: bool = True):
         print(f"  [TIP] Chay: python telegram_ads_auto_export.py --login --account \"{account_name}\"")
         return
 
-    # Load cookies
-    cookies = json.loads(cookie_path.read_text(encoding='utf-8'))
+    # Load cookies — handle multiple file formats:
+    # - Bare array (old): [{cookie1}, {cookie2}, ...]
+    # - Wrapped dict (login service): {"cookies": [...], "storage_state": {...}, ...}
+    # - Bookmarklet dict: {"cookies": "raw_string", ...}
+    raw_data = json.loads(cookie_path.read_text(encoding='utf-8'))
+    storage_state = None
+    if isinstance(raw_data, dict):
+        cookies = raw_data.get('cookies', [])
+        storage_state = raw_data.get('storage_state')
+        # Bookmarklet format: cookies is a string, not a list
+        if isinstance(cookies, str):
+            print(f"  [WARN] Cookie file is bookmarklet format (string), not usable.")
+            print(f"  [TIP] Re-login via web login flow.")
+            return
+        print(f"  [INFO] Cookie file: wrapped format, {len(cookies)} cookies extracted.")
+    else:
+        cookies = raw_data
+        print(f"  [INFO] Cookie file: bare array format, {len(cookies)} cookies.")
+
+    if not cookies:
+        print(f"  [ERROR] Cookie file is empty or invalid.")
+        return
 
     # Load organizations list
     orgs = [account_name]  # Default: chi co 1 org
@@ -515,12 +545,32 @@ def export_account(account_name: str, headless: bool = True):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
-        context = browser.new_context(
-            viewport={"width": 1400, "height": 900},
-            locale="en-US",
-            accept_downloads=True,
-        )
-        context.add_cookies(cookies)
+
+        # Prefer storage_state (restores cookies + localStorage together)
+        if storage_state:
+            print(f"  [INFO] Restoring session via storage_state (best method).")
+            # Write temp storage_state file for Playwright
+            ss_path = cookie_path.with_suffix('.storage_state.json')
+            ss_path.write_text(json.dumps(storage_state, indent=2, ensure_ascii=False), encoding='utf-8')
+            context = browser.new_context(
+                viewport={"width": 1400, "height": 900},
+                locale="en-US",
+                accept_downloads=True,
+                storage_state=str(ss_path),
+            )
+            # Clean up temp file
+            try:
+                ss_path.unlink()
+            except Exception:
+                pass
+        else:
+            context = browser.new_context(
+                viewport={"width": 1400, "height": 900},
+                locale="en-US",
+                accept_downloads=True,
+            )
+            context.add_cookies(cookies)
+
         page = context.new_page()
 
         # Kiem tra login
@@ -578,9 +628,19 @@ def export_account(account_name: str, headless: bool = True):
             if i < len(orgs):
                 time.sleep(2)
 
-        # Cap nhat cookies
+        # Cap nhat cookies + storage_state (wrapped format)
         new_cookies = context.cookies()
-        cookie_path.write_text(json.dumps(new_cookies, indent=2, ensure_ascii=False), encoding='utf-8')
+        try:
+            new_storage_state = context.storage_state()
+        except Exception:
+            new_storage_state = None
+        save_obj = {
+            'cookies': new_cookies,
+            'storage_state': new_storage_state,
+            'updated_at': datetime.now().isoformat(),
+            'source': 'export_refresh',
+        }
+        cookie_path.write_text(json.dumps(save_obj, indent=2, ensure_ascii=False), encoding='utf-8')
 
         browser.close()
 
