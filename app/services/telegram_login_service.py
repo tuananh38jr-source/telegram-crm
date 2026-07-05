@@ -446,48 +446,16 @@ async def check_auth_status(session_id: str) -> dict:
     try:
         current_url = page.url
 
-        # Check 1: URL changed to dashboard
+        # Check 1: URL changed to dashboard (most reliable indicator)
         if 'ads.telegram.org' in current_url and '/account' in current_url:
             return await _on_authenticated(session)
 
-        # Check 2: Login modal disappeared (page navigated)
-        modal_gone = False
+        # Check 2: Session cookies exist (reliable auth indicator)
+        cookies = []
         try:
-            modal = page.locator('text=Log In').first
-            if not await modal.is_visible(timeout=500):
-                modal_gone = True
+            cookies = await context.cookies()
         except Exception:
-            modal_gone = True  # Locator failed = modal likely gone
-
-        if modal_gone and 'ads.telegram.org' in current_url:
-            # Modal disappeared but URL didn't change to /account yet
-            # Give it a moment and check again
-            await asyncio.sleep(1)
-            current_url = page.url
-            if '/account' in current_url:
-                return await _on_authenticated(session)
-
-        # Check 3: Dashboard elements present
-        dashboard_indicators = [
-            'text=Create a new ad',
-            'text=Manage budget',
-            '[class*="campaign"]',
-            '[class*="dashboard"]',
-            '[class*="statistics"]',
-            'a[href*="/account/"]',
-            '[class*="header-user"]',
-            '[class*="sidebar"]',
-        ]
-        for selector in dashboard_indicators:
-            try:
-                el = page.locator(selector).first
-                if await el.is_visible(timeout=500):
-                    return await _on_authenticated(session)
-            except Exception:
-                continue
-
-        # Check 4: Session cookies exist
-        cookies = await context.cookies()
+            pass
         has_session_cookie = any(
             c['name'] in (
                 'stel_ssid', 'stel_tsession', 'stel_token',
@@ -498,7 +466,28 @@ async def check_auth_status(session_id: str) -> dict:
         if has_session_cookie:
             return await _on_authenticated(session)
 
-        # Check 5: Check if there's a code input (2FA step)
+        # Check 3: Dashboard elements (VERY specific to Telegram Ads dashboard)
+        # Only match text that UNIQUELY appears on the dashboard, not landing page
+        dashboard_text_indicators = [
+            'text=Create a new ad',
+            'text=Manage budget',
+            'text=Total spend',
+            'text=Budget:',
+        ]
+        match_count = 0
+        for selector in dashboard_text_indicators:
+            try:
+                el = page.locator(selector).first
+                if await el.is_visible(timeout=300):
+                    match_count += 1
+            except Exception:
+                continue
+
+        # Require at least 2 dashboard indicators to avoid false positives
+        if match_count >= 2:
+            return await _on_authenticated(session)
+
+        # Check 4: Check if there's a code input (2FA step)
         try:
             code_input = page.locator('input[name="code"], input[type="text"][placeholder*="code"]').first
             if await code_input.is_visible(timeout=500):
