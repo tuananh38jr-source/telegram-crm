@@ -424,8 +424,8 @@ async def check_auth_status(session_id: str) -> dict:
 
     if session['status'] in ('authenticated', 'error', 'cancelled'):
         result = {'status': session['status']}
-        if session.get('cookies'):
-            result['cookies_count'] = len(session['cookies'])
+        cookies = session.get('cookies', [])
+        result['cookies_count'] = len(cookies) if cookies else 0
         if session.get('error'):
             result['error'] = session['error']
         return result
@@ -564,41 +564,112 @@ async def submit_verification_code(session_id: str, code: str) -> dict:
 
 async def _on_authenticated(session: dict) -> dict:
     """Handle successful authentication: save cookies + update DB."""
-    context = session['context']
+    # Prevent race condition: mark as authenticated IMMEDIATELY so concurrent
+    # polls from the frontend don't trigger this function twice
+    session['status'] = 'authenticated'
+
+    context = session.get('context')
+    page = session.get('page')
     account_name = session['account_name']
 
     try:
-        # Wait a moment for all cookies to settle
-        await asyncio.sleep(2)
+        # Wait longer for all cookies/tokens to settle after redirect
+        await asyncio.sleep(4)
 
-        cookies = await context.cookies()
+        # Primary: get cookies from browser context (includes httpOnly)
+        cookies = []
+        if context:
+            try:
+                cookies = await context.cookies()
+            except Exception as e:
+                logger.warning(f"[Login] context.cookies() failed: {e}")
+
+        # Fallback: if context.cookies() returned empty, try JavaScript
+        if not cookies and page:
+            try:
+                js_cookies = await page.evaluate('() => document.cookie')
+                logger.info(f"[Login] Fallback JS cookies: '{js_cookies[:200]}'")
+                if js_cookies:
+                    # Parse JS cookies into Playwright cookie format
+                    for pair in js_cookies.split(';'):
+                        pair = pair.strip()
+                        if '=' in pair:
+                            name, _, value = pair.partition('=')
+                            cookies.append({
+                                'name': name.strip(),
+                                'value': value.strip(),
+                                'domain': '.telegram.org',
+                                'path': '/',
+                            })
+            except Exception as e:
+                logger.warning(f"[Login] JS cookie fallback failed: {e}")
+
+        # Also try getting cookies for specific URLs
+        if not cookies and context:
+            try:
+                cookies = await context.cookies(['https://ads.telegram.org'])
+                logger.info(f"[Login] URL-specific cookies: {len(cookies)}")
+            except Exception as e:
+                logger.warning(f"[Login] URL-specific cookies failed: {e}")
+
         session['cookies'] = cookies
-        session['status'] = 'authenticated'
+
+        # Capture localStorage data as supplementary auth data
+        storage_data = {}
+        if page:
+            try:
+                storage_data = await page.evaluate('''() => {
+                    const data = {};
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        data[key] = localStorage.getItem(key);
+                    }
+                    return data;
+                }''')
+                if storage_data:
+                    logger.info(f"[Login] Captured {len(storage_data)} localStorage items")
+            except Exception as e:
+                logger.warning(f"[Login] localStorage capture failed: {e}")
 
         # Save cookies to file
         safe_name = safe_filename(account_name)
         cookie_path = COOKIES_DIR / f"{safe_name}.json"
-        cookie_path.write_text(
-            json.dumps(cookies, indent=2, ensure_ascii=False),
-            encoding='utf-8',
-        )
+
+        save_data = cookies
+        # If we have storage data but no cookies, save storage data too
+        if storage_data:
+            # Merge localStorage into the saved file for maximum auth coverage
+            save_obj = {
+                'cookies': cookies,
+                'localStorage': storage_data,
+                'captured_at': datetime.now().isoformat(),
+            }
+            cookie_path.write_text(
+                json.dumps(save_obj, indent=2, ensure_ascii=False),
+                encoding='utf-8',
+            )
+        else:
+            cookie_path.write_text(
+                json.dumps(cookies, indent=2, ensure_ascii=False),
+                encoding='utf-8',
+            )
 
         # Try to detect organizations
         orgs = []
         try:
-            page = session['page']
-            orgs = await _detect_orgs_headless(page)
-            if orgs:
-                orgs_path = COOKIES_DIR / f"{safe_name}_orgs.json"
-                orgs_data = {
-                    "account_name": account_name,
-                    "organizations": orgs,
-                    "detected_at": datetime.now().isoformat(),
-                }
-                orgs_path.write_text(
-                    json.dumps(orgs_data, indent=2, ensure_ascii=False),
-                    encoding='utf-8',
-                )
+            if page:
+                orgs = await _detect_orgs_headless(page)
+                if orgs:
+                    orgs_path = COOKIES_DIR / f"{safe_name}_orgs.json"
+                    orgs_data = {
+                        "account_name": account_name,
+                        "organizations": orgs,
+                        "detected_at": datetime.now().isoformat(),
+                    }
+                    orgs_path.write_text(
+                        json.dumps(orgs_data, indent=2, ensure_ascii=False),
+                        encoding='utf-8',
+                    )
         except Exception as e:
             logger.warning(f"[Login] Could not detect orgs: {e}")
 
@@ -607,7 +678,7 @@ async def _on_authenticated(session: dict) -> dict:
 
         logger.info(
             f"[Login] Authenticated: '{account_name}' "
-            f"({len(cookies)} cookies, {len(orgs)} orgs)"
+            f"({len(cookies)} cookies, {len(storage_data)} localStorage, {len(orgs)} orgs)"
         )
 
         # Cleanup browser
@@ -617,6 +688,7 @@ async def _on_authenticated(session: dict) -> dict:
             'status': 'authenticated',
             'cookies_count': len(cookies),
             'orgs_count': len(orgs),
+            'localStorage_count': len(storage_data),
         }
 
     except Exception as e:
