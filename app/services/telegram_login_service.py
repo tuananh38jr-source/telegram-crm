@@ -16,11 +16,19 @@ import json
 import logging
 import os
 import re
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+# Force stdout handler so Railway deploy logs capture everything
+if not logger.handlers:
+    _handler = logging.StreamHandler(sys.stdout)
+    _handler.setLevel(logging.DEBUG)
+    _handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    logger.addHandler(_handler)
+    logger.setLevel(logging.DEBUG)
 
 BASE_DIR = Path(__file__).parent.parent.parent
 COOKIES_DIR = BASE_DIR / "telegram_ads_cookies"
@@ -564,8 +572,7 @@ async def submit_verification_code(session_id: str, code: str) -> dict:
 
 async def _on_authenticated(session: dict) -> dict:
     """Handle successful authentication: save cookies + update DB."""
-    # Prevent race condition: mark as authenticated IMMEDIATELY so concurrent
-    # polls from the frontend don't trigger this function twice
+    # Prevent race condition: mark as authenticated IMMEDIATELY
     session['status'] = 'authenticated'
 
     context = session.get('context')
@@ -573,88 +580,149 @@ async def _on_authenticated(session: dict) -> dict:
     account_name = session['account_name']
 
     try:
-        # Wait longer for all cookies/tokens to settle after redirect
-        await asyncio.sleep(4)
+        # ===== DIAGNOSTIC: Log current state =====
+        current_url = 'unknown'
+        if page:
+            try:
+                current_url = page.url
+            except Exception:
+                pass
+        logger.info(f"[Login][DIAG] === Authenticated for '{account_name}' ===")
+        logger.info(f"[Login][DIAG] URL: {current_url}")
+        logger.info(f"[Login][DIAG] context alive: {context is not None}")
+        logger.info(f"[Login][DIAG] page alive: {page is not None}")
 
-        # Primary: get cookies from browser context (includes httpOnly)
-        cookies = []
+        # Wait for cookies to settle
+        await asyncio.sleep(5)
+
+        # ===== METHOD 1: storage_state() — captures cookies + localStorage =====
+        storage_state = {}
         if context:
             try:
-                cookies = await context.cookies()
+                storage_state = await context.storage_state()
+                ss_cookies = storage_state.get('cookies', [])
+                ss_origins = storage_state.get('origins', [])
+                logger.info(
+                    f"[Login][DIAG] storage_state(): "
+                    f"{len(ss_cookies)} cookies, {len(ss_origins)} origins"
+                )
+                # Log first few cookie names for debugging
+                if ss_cookies:
+                    names = [c['name'] for c in ss_cookies[:10]]
+                    logger.info(f"[Login][DIAG] Cookie names: {names}")
             except Exception as e:
-                logger.warning(f"[Login] context.cookies() failed: {e}")
+                logger.error(f"[Login][DIAG] storage_state() FAILED: {e}")
 
-        # Fallback: if context.cookies() returned empty, try JavaScript
-        if not cookies and page:
+        # ===== METHOD 2: context.cookies() — traditional =====
+        direct_cookies = []
+        if context:
             try:
-                js_cookies = await page.evaluate('() => document.cookie')
-                logger.info(f"[Login] Fallback JS cookies: '{js_cookies[:200]}'")
-                if js_cookies:
-                    # Parse JS cookies into Playwright cookie format
-                    for pair in js_cookies.split(';'):
-                        pair = pair.strip()
-                        if '=' in pair:
-                            name, _, value = pair.partition('=')
-                            cookies.append({
-                                'name': name.strip(),
-                                'value': value.strip(),
-                                'domain': '.telegram.org',
-                                'path': '/',
-                            })
+                direct_cookies = await context.cookies()
+                logger.info(f"[Login][DIAG] context.cookies(): {len(direct_cookies)} cookies")
             except Exception as e:
-                logger.warning(f"[Login] JS cookie fallback failed: {e}")
+                logger.error(f"[Login][DIAG] context.cookies() FAILED: {e}")
 
-        # Also try getting cookies for specific URLs
-        if not cookies and context:
+        # ===== METHOD 3: JavaScript fallbacks =====
+        js_cookies_str = ''
+        js_storage_str = ''
+        if page:
             try:
-                cookies = await context.cookies(['https://ads.telegram.org'])
-                logger.info(f"[Login] URL-specific cookies: {len(cookies)}")
+                js_cookies_str = await page.evaluate('() => document.cookie')
+                logger.info(f"[Login][DIAG] document.cookie: '{js_cookies_str[:300]}'")
             except Exception as e:
-                logger.warning(f"[Login] URL-specific cookies failed: {e}")
+                logger.error(f"[Login][DIAG] document.cookie FAILED: {e}")
+
+            try:
+                js_storage_str = await page.evaluate('''() => {
+                    const data = {};
+                    try {
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const key = localStorage.key(i);
+                            data[key] = localStorage.getItem(key);
+                        }
+                    } catch(e) {}
+                    try {
+                        for (let i = 0; i < sessionStorage.length; i++) {
+                            const key = sessionStorage.key(i);
+                            data['ss_' + key] = sessionStorage.getItem(key);
+                        }
+                    } catch(e) {}
+                    return JSON.stringify(data);
+                }''')
+                logger.info(f"[Login][DIAG] localStorage/sessionStorage: '{js_storage_str[:300]}'")
+            except Exception as e:
+                logger.error(f"[Login][DIAG] JS storage FAILED: {e}")
+
+        # ===== Take diagnostic screenshot =====
+        safe_name = safe_filename(account_name)
+        screenshot_path = str(SCREENSHOTS_DIR / f"{safe_name}_auth_dashboard.png")
+        if page:
+            try:
+                await page.screenshot(path=screenshot_path, full_page=False)
+                logger.info(f"[Login][DIAG] Screenshot saved: {screenshot_path}")
+            except Exception as e:
+                logger.error(f"[Login][DIAG] Screenshot FAILED: {e}")
+
+        # ===== Determine best cookie data =====
+        # Use storage_state cookies if available (most complete)
+        cookies = storage_state.get('cookies', []) if storage_state else []
+        if not cookies:
+            cookies = direct_cookies
+        if not cookies and js_cookies_str:
+            for pair in js_cookies_str.split(';'):
+                pair = pair.strip()
+                if '=' in pair:
+                    name, _, value = pair.partition('=')
+                    cookies.append({
+                        'name': name.strip(),
+                        'value': value.strip(),
+                        'domain': '.telegram.org',
+                        'path': '/',
+                    })
+
+        # Parse localStorage/sessionStorage from JS
+        storage_data = {}
+        if js_storage_str:
+            try:
+                storage_data = json.loads(js_storage_str)
+            except Exception:
+                pass
+
+        # Also check storage_state origins for localStorage
+        if storage_state:
+            for origin in storage_state.get('origins', []):
+                for item in origin.get('localStorage', []):
+                    storage_data[item['name']] = item['value']
 
         session['cookies'] = cookies
 
-        # Capture localStorage data as supplementary auth data
-        storage_data = {}
-        if page:
-            try:
-                storage_data = await page.evaluate('''() => {
-                    const data = {};
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        data[key] = localStorage.getItem(key);
-                    }
-                    return data;
-                }''')
-                if storage_data:
-                    logger.info(f"[Login] Captured {len(storage_data)} localStorage items")
-            except Exception as e:
-                logger.warning(f"[Login] localStorage capture failed: {e}")
+        logger.info(
+            f"[Login][DIAG] FINAL: {len(cookies)} cookies, "
+            f"{len(storage_data)} storage items"
+        )
 
-        # Save cookies to file
-        safe_name = safe_filename(account_name)
+        # ===== Save everything to file =====
         cookie_path = COOKIES_DIR / f"{safe_name}.json"
+        save_obj = {
+            'cookies': cookies,
+            'localStorage': storage_data,
+            'storage_state': storage_state,  # full Playwright state for reuse
+            'captured_at': datetime.now().isoformat(),
+            'diagnostics': {
+                'url': current_url,
+                'ss_cookies_count': len(storage_state.get('cookies', [])) if storage_state else 0,
+                'direct_cookies_count': len(direct_cookies),
+                'js_cookie_str_length': len(js_cookies_str),
+                'js_storage_str_length': len(js_storage_str),
+            },
+        }
+        cookie_path.write_text(
+            json.dumps(save_obj, indent=2, ensure_ascii=False),
+            encoding='utf-8',
+        )
+        logger.info(f"[Login] Saved auth data to {cookie_path}")
 
-        save_data = cookies
-        # If we have storage data but no cookies, save storage data too
-        if storage_data:
-            # Merge localStorage into the saved file for maximum auth coverage
-            save_obj = {
-                'cookies': cookies,
-                'localStorage': storage_data,
-                'captured_at': datetime.now().isoformat(),
-            }
-            cookie_path.write_text(
-                json.dumps(save_obj, indent=2, ensure_ascii=False),
-                encoding='utf-8',
-            )
-        else:
-            cookie_path.write_text(
-                json.dumps(cookies, indent=2, ensure_ascii=False),
-                encoding='utf-8',
-            )
-
-        # Try to detect organizations
+        # ===== Detect organizations =====
         orgs = []
         try:
             if page:
@@ -676,11 +744,6 @@ async def _on_authenticated(session: dict) -> dict:
         # Update account in database
         _update_account_db(account_name, cookie_path, orgs)
 
-        logger.info(
-            f"[Login] Authenticated: '{account_name}' "
-            f"({len(cookies)} cookies, {len(storage_data)} localStorage, {len(orgs)} orgs)"
-        )
-
         # Cleanup browser
         await _close_browser(session)
 
@@ -688,10 +751,11 @@ async def _on_authenticated(session: dict) -> dict:
             'status': 'authenticated',
             'cookies_count': len(cookies),
             'orgs_count': len(orgs),
-            'localStorage_count': len(storage_data),
+            'storage_count': len(storage_data),
         }
 
     except Exception as e:
+        logger.error(f"[Login][DIAG] EXCEPTION in _on_authenticated: {e}", exc_info=True)
         session['status'] = 'error'
         session['error'] = f'Loi khi luu cookies: {str(e)}'
         return {'status': 'error', 'error': session['error']}
